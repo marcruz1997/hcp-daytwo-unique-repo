@@ -1,4 +1,6 @@
-# Policy que CRIA e MANTÉM este cluster. Roda no local-cluster (o próprio hub).
+# Lado HOSTING: policy que CRIA e MANTÉM este cluster no HUB (local-cluster).
+# HostedCluster/NodePools/secrets em clusters, Role em clusters-<nome>, CronJob em hcp-etcd-backup,
+# ManagedCluster e KlusterletAddonConfig. Conteúdo: hosting/ (base + components + params).
 # Troque "teste-pg01" pelo nome do cluster nas 3 linhas marcadas.
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
@@ -25,4 +27,4 @@ policyDefaults:
 policies:
   - name: hcp-teste-pg01
     manifests:
-      - path: cluster
+      - path: hosting

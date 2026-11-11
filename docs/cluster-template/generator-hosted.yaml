@@ -1,0 +1,29 @@
+# Lado HOSTED: policies que valem SÓ para este cluster e são aplicadas DENTRO dele.
+# (O que é comum a vários clusters fica em policies/features e é escolhido pelos labels feature.pg.lab/*.)
+# O Placement escolhe o cluster pelo label "name", que o ACM mantém no ManagedCluster.
+# Prefixe as policies com o nome do cluster: os nomes são únicos no namespace pg-policies-features.
+apiVersion: policy.open-cluster-management.io/v1
+kind: PolicyGenerator
+metadata:
+  name: NOME-hosted
+placementBindingDefaults:
+  name: pb-NOME-hosted
+policyDefaults:
+  namespace: pg-policies-features
+  remediationAction: enforce
+  severity: low
+  complianceType: musthave
+  pruneObjectBehavior: DeleteIfCreated   # tirou do Git -> some do cluster (só o que a policy criou)
+  categories: ["CM Configuration Management"]
+  standards: ["NIST SP 800-53"]
+  controls: ["CM-2 Baseline Configuration"]
+  placement:
+    name: pl-NOME-hosted
+    labelSelector:
+      matchExpressions:
+        - {key: name, operator: In, values: ["NOME"]}
+policies:
+  # Exemplo inofensivo: faixa no topo do console identificando o cluster.
+  - name: NOME-console-banner
+    manifests:
+      - path: hosted/console-banner.yaml

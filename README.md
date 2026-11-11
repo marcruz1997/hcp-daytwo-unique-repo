@@ -15,13 +15,26 @@ git push clusters/<nome>/
                        └─ labels feature.pg.lab/*  ->  policies de day-2 (pg-policies-features)
 ```
 
+## Hosting x Hosted: onde cada policy é aplicada
+
+| Lado | Aplica onde | Namespace das policies | Origem no Git | Escolhe o cluster por |
+|---|---|---|---|---|
+| **hosting** compartilhado | HUB (local-cluster) | `pg-policies-hub` | `policies/hub/` | label `local-cluster=true` |
+| **hosting** do cluster | HUB (local-cluster): `clusters`, `clusters-<nome>`, `hcp-etcd-backup`, ManagedCluster | `pg-provisioning` | `clusters/<nome>/generator-hosting.yaml` + `hosting/` | label `local-cluster=true` |
+| **hosted** compartilhado | DENTRO dos clusters filhos | `pg-policies-features` | `policies/features/` | labels `feature.pg.lab/*` |
+| **hosted** do cluster | DENTRO de um cluster só | `pg-policies-features` | `clusters/<nome>/generator-hosted.yaml` + `hosted/` | label `name=<nome>` |
+
+Regra: o que o HyperShift reconcilia no hub (HostedCluster, NodePool, OAuth, MachineConfig/NTP,
+labels e taints de nós, etcd) é **hosting**. Operators, ingress, registry, RBAC e monitoring
+dentro do cluster são **hosted**.
+
 ## Estrutura
 
 ```
 bootstrap/                      # aplicar uma vez: oc apply -f bootstrap/
 hub/                            # namespaces + ManagedClusterSetBindings
-policies/hub/                   # copia o pull-secret do hub (hcp-pull-secret)
-policies/features/              # day-2: registry, ingress, loki, logging, observability, oauth-admin
+policies/hub/                   # HOSTING compartilhado: copia o pull-secret do hub (hcp-pull-secret)
+policies/features/              # HOSTED compartilhado: registry, ingress, loki, logging, observability, oauth-admin
 provisioning/
   base/                         # HostedCluster, NodePool worker, ManagedCluster, KAC, ssh secret
   components/
@@ -32,10 +45,12 @@ provisioning/
     features/{ingress,registry,observability,loki,logging}
     apply-params/               # SEMPRE o último: aplica o params.yaml
 clusters/<nome>/
-  kustomization.yaml            # chama o PolicyGenerator
-  policyGenerator.yaml          # policy hcp-<nome> no local-cluster
-  cluster/kustomization.yaml    # base + components escolhidos
-  cluster/params.yaml           # nome, versão, réplicas, ssh, parâmetros das features
+  kustomization.yaml            # lista os dois generators
+  generator-hosting.yaml        # HOSTING: policy hcp-<nome> em pg-provisioning, aplicada no hub
+  hosting/kustomization.yaml    # base + components escolhidos
+  hosting/params.yaml           # nome, versão, réplicas, ssh, parâmetros das features
+  generator-hosted.yaml         # HOSTED: policies <nome>-* aplicadas só dentro deste cluster
+  hosted/                       # manifests dessas policies
 docs/cluster-template/          # modelo para novos clusters
 scripts/chrony-b64.sh           # gera o conteúdo do NTP
 ```
@@ -44,9 +59,10 @@ scripts/chrony-b64.sh           # gera o conteúdo do NTP
 
 ```bash
 cp -r docs/cluster-template clusters/app01
-sed -i '' 's/NOME/app01/g' clusters/app01/policyGenerator.yaml clusters/app01/cluster/params.yaml   # macOS
-# edite clusters/app01/cluster/params.yaml (versão, ssh, réplicas, oauth...)
-# edite clusters/app01/cluster/kustomization.yaml (components: tamanhos e features)
+grep -rl NOME clusters/app01 | xargs sed -i '' 's/NOME/app01/g'      # macOS (no Linux: sed -i sem '')
+# edite clusters/app01/hosting/params.yaml (versão, ssh, réplicas, oauth...)
+# edite clusters/app01/hosting/kustomization.yaml (components: tamanhos e features)
+# opcional: policies só deste cluster em clusters/app01/generator-hosted.yaml + hosted/
 git add -A && git commit -m "app01" && git push
 ```
 
@@ -64,6 +80,17 @@ oc -n local-cluster get policy pg-provisioning.hcp-app01 -o jsonpath='{.status.d
 ```
 Logo após a criação é normal ela ficar NonCompliant por alguns minutos (ex.: o namespace do
 KlusterletAddonConfig ainda não existe). O ACM tenta de novo sozinho.
+
+## Policy só de um cluster
+
+- **No hub** (ex.: um NodePool extra só do app01): adicione o recurso em `clusters/app01/hosting/`
+  (arquivo novo + `resources:` no `hosting/kustomization.yaml`). Ele entra na policy `hcp-app01`.
+- **Dentro do cluster**: arquivo em `clusters/app01/hosted/` + policy no `generator-hosted.yaml`.
+  O Placement já filtra `name=app01`. Prefixe o nome da policy com o cluster (`app01-...`).
+  Essas policies usam `pruneObjectBehavior: DeleteIfCreated`: tirar do Git remove do cluster.
+
+Se um segundo cluster precisar da mesma coisa, transforme em feature compartilhada
+(`policies/features/` + component que coloca o label).
 
 ## Components (o "cardápio")
 
@@ -125,9 +152,9 @@ oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-foun
 
 ## Bootstrap
 
-1. Troque a URL do repo se o nome for outro:
+1. O bootstrap aponta para `marcruz1997/hcp-lab-day-two-policies`. Se mudar o repo:
    ```bash
-   grep -rl lab-hcp-policygenerator bootstrap | xargs sed -i '' 's#marcruz1997/lab-hcp-policygenerator#SEU_ORG/SEU_REPO#'
+   grep -rl hcp-lab-day-two-policies bootstrap | xargs sed -i '' 's#marcruz1997/hcp-lab-day-two-policies#SEU_ORG/SEU_REPO#'
    ```
 2. Pré-requisitos no hub (iguais ao outro repo): OpenShift GitOps com o plugin do PolicyGenerator,
    ACM/MCE com HyperShift, OpenShift Virtualization, MetalLB (APIServer LoadBalancer).

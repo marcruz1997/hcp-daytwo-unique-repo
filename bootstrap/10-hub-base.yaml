@@ -7,7 +7,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/marcruz1997/lab-hcp-policygenerator.git
+    repoURL: https://github.com/marcruz1997/hcp-lab-day-two-policies.git
     targetRevision: main
     path: hub
   destination:

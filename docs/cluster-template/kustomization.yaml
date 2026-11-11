@@ -1,3 +1,7 @@
-# O Argo renderiza esta pasta: o PolicyGenerator transforma cluster/ numa Policy.
+# O Argo renderiza esta pasta. Cada generator vira policies de um "lado":
+#   generator-hosting.yaml -> pg-provisioning       -> aplicadas NO HUB (cria/mantém o cluster)
+#   generator-hosted.yaml  -> pg-policies-features  -> aplicadas DENTRO deste cluster (só ele)
+# Sem policies exclusivas do cluster? Tire generator-hosted.yaml desta lista.
 generators:
-  - policyGenerator.yaml
+  - generator-hosting.yaml
+  - generator-hosted.yaml

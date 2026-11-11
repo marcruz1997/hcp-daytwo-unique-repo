@@ -1,0 +1,9 @@
+apiVersion: console.openshift.io/v1
+kind: ConsoleNotification
+metadata:
+  name: pg-lab-cluster-banner
+spec:
+  text: "teste-pg01 · Hosted Control Plane"
+  location: BannerTop
+  color: "#ffffff"
+  backgroundColor: "#0066cc"

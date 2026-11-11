@@ -66,6 +66,8 @@ policies:
       - path: manifests/loki/04-lokistack.yaml
 
   - name: feature-logging
+    dependencies:                      # o ClusterLogForwarder precisa do LokiStack pronto
+      - name: feature-loki
     placement:
       name: pl-feature-logging
       labelSelector:
@@ -95,6 +97,9 @@ policies:
 
   # Plugin de logs no console: só quando o cluster tem logging E observability (precisa do COO).
   - name: feature-logging-ui
+    dependencies:                      # o UIPlugin é do COO e aponta para o LokiStack
+      - name: feature-observability
+      - name: feature-logging
     placement:
       name: pl-feature-logging-ui
       labelSelector:
