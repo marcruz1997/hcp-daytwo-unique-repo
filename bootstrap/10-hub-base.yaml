@@ -1,0 +1,22 @@
+# Namespaces e bindings do hub.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pg-hub-base
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/marcruz1997/lab-hcp-policygenerator.git
+    targetRevision: main
+    path: hub
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff: {duration: 30s, factor: 2, maxDuration: 5m}

@@ -1,0 +1,40 @@
+# Um Application por pasta clusters/<nome>/. Cada pasta gera (via PolicyGenerator) a policy
+# hcp-<nome> em pg-provisioning, que o ACM aplica no local-cluster para criar o cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: pg-clusters
+  namespace: openshift-gitops
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/marcruz1997/lab-hcp-policygenerator.git
+        revision: main
+        requeueAfterSeconds: 60
+        directories:
+          - path: "clusters/*"
+  # Apagar a pasta apaga o Application e a Policy; o cluster CONTINUA
+  # (pruneObjectBehavior: None). Destruição é sempre manual (ver README).
+  template:
+    metadata:
+      name: "pg-{{ .path.basename }}"
+      labels:
+        pg-cluster: "{{ .path.basename }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/marcruz1997/lab-hcp-policygenerator.git
+        targetRevision: main
+        path: "{{ .path.path }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: pg-provisioning
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 10
+          backoff: {duration: 30s, factor: 2, maxDuration: 5m}

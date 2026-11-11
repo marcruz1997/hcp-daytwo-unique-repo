@@ -1,0 +1,12 @@
+# Bucket S3 do Loki, criado no HUB (ODF/Ceph RGW). O ODF gera Secret+ConfigMap "loki-<nome>"
+# no mesmo namespace; a policy feature-loki copia para o cluster via hub template.
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: loki-CLUSTER
+  namespace: pg-policies-features
+  labels:
+    pg.lab/role: loki-bucket
+spec:
+  generateBucketName: loki-CLUSTER
+  storageClassName: ocs-external-storagecluster-ceph-rgw

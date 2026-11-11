@@ -1,0 +1,17 @@
+apiVersion: imageregistry.operator.openshift.io/v1
+kind: Config
+metadata:
+  name: cluster
+spec:
+  managementState: Managed
+  replicas: 1
+  rolloutStrategy: Recreate   # PVC RWO -> 1 réplica + Recreate
+  defaultRoute: true
+  storage:
+    pvc:
+      claim: image-registry-storage
+  nodeSelector:
+    hcp.lab/infra-workloads: "true"
+  tolerations:
+    - {key: node-role.kubernetes.io/infra, value: reserved, effect: NoSchedule}
+    - {key: node-role.kubernetes.io/infra, value: reserved, effect: NoExecute}

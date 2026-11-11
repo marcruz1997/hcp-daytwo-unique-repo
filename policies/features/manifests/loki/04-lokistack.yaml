@@ -1,0 +1,36 @@
+apiVersion: loki.grafana.com/v1
+kind: LokiStack
+metadata:
+  name: logging-loki
+  namespace: openshift-logging
+spec:
+  managementState: Managed
+  size: '{{hub index .ManagedClusterLabels "config.pg.lab/loki-size" hub}}'
+  storageClassName: kubevirt-csi-infra-default
+  storage:
+    schemas:
+      - version: v13
+        effectiveDate: "2024-10-01"
+    secret:
+      name: logging-loki-s3
+      type: s3
+  limits:
+    global:
+      retention:
+        days: '{{hub index .ManagedClusterLabels "config.pg.lab/loki-retention" | toInt hub}}'
+  tenants:
+    mode: openshift-logging
+  template:
+    compactor: &infra
+      nodeSelector:
+        hcp.lab/infra-workloads: "true"
+      tolerations:
+        - {key: node-role.kubernetes.io/infra, operator: Equal, value: reserved, effect: NoSchedule}
+        - {key: node-role.kubernetes.io/infra, operator: Equal, value: reserved, effect: NoExecute}
+    distributor: *infra
+    gateway: *infra
+    indexGateway: *infra
+    ingester: *infra
+    querier: *infra
+    queryFrontend: *infra
+    ruler: *infra

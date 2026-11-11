@@ -1,0 +1,16 @@
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  name: CLUSTER
+  labels:
+    name: CLUSTER
+    cloud: BareMetal
+    vendor: OpenShift
+    env: ENV
+    cluster-group: default
+  annotations:
+    import.open-cluster-management.io/hosting-cluster-name: local-cluster
+    import.open-cluster-management.io/klusterlet-deploy-mode: Hosted
+    open-cluster-management/created-via: hypershift
+spec:
+  hubAcceptsClient: true

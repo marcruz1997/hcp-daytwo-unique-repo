@@ -1,0 +1,26 @@
+# Policies que rodam NO PRÓPRIO HUB (local-cluster): pré-requisitos do provisionamento HCP.
+apiVersion: policy.open-cluster-management.io/v1
+kind: PolicyGenerator
+metadata:
+  name: hub-policies
+placementBindingDefaults:
+  name: hub-policies-binding
+policyDefaults:
+  namespace: pg-policies-hub
+  remediationAction: enforce
+  severity: high
+  complianceType: musthave
+  pruneObjectBehavior: None
+  placement:
+    name: placement-local-cluster
+    labelSelector:
+      matchExpressions:
+        - key: local-cluster
+          operator: In
+          values: ["true"]
+policies:
+  # Copia openshift-config/pull-secret do hub para clusters/hcp-pull-secret.
+  # O valor nunca passa pelo Git; se o pull-secret do hub mudar, a cópia acompanha.
+  - name: hcp-pull-secret
+    manifests:
+      - path: manifests/hcp-pull-secret.yaml

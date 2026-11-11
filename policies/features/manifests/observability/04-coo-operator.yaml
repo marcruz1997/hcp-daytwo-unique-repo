@@ -1,0 +1,14 @@
+apiVersion: policy.open-cluster-management.io/v1beta1
+kind: OperatorPolicy
+metadata:
+  name: cluster-observability-operator
+spec:
+  remediationAction: enforce
+  severity: medium
+  complianceType: musthave
+  upgradeApproval: Automatic
+  subscription:
+    name: cluster-observability-operator
+    namespace: openshift-cluster-observability-operator
+    source: redhat-operators
+    sourceNamespace: openshift-marketplace

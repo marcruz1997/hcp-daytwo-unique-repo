@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-workload-monitoring-config
+  namespace: openshift-user-workload-monitoring
+data:
+  config.yaml: |
+    prometheus:
+      retention: {{hub index .ManagedClusterLabels "config.pg.lab/uwm-retention" hub}}
+      volumeClaimTemplate:
+        spec:
+          resources:
+            requests:
+              storage: {{hub index .ManagedClusterLabels "config.pg.lab/uwm-storage" hub}}

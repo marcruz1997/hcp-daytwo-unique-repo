@@ -1,0 +1,36 @@
+# Day-2: monitoring persistente + user workload + COO (policy feature-observability).
+# Requer no params.yaml: spec.observability.* (valores entre aspas)
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target: {kind: ManagedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/feature.pg.lab~1observability
+        value: "true"
+replacements:
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.observability.prometheusRetention}
+    targets:
+      - select: {kind: ManagedCluster}
+        fieldPaths: ["metadata.labels.[config.pg.lab/prom-retention]"]
+        options: {create: true}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.observability.prometheusStorage}
+    targets:
+      - select: {kind: ManagedCluster}
+        fieldPaths: ["metadata.labels.[config.pg.lab/prom-storage]"]
+        options: {create: true}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.observability.alertmanagerStorage}
+    targets:
+      - select: {kind: ManagedCluster}
+        fieldPaths: ["metadata.labels.[config.pg.lab/am-storage]"]
+        options: {create: true}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.observability.uwmRetention}
+    targets:
+      - select: {kind: ManagedCluster}
+        fieldPaths: ["metadata.labels.[config.pg.lab/uwm-retention]"]
+        options: {create: true}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.observability.uwmStorage}
+    targets:
+      - select: {kind: ManagedCluster}
+        fieldPaths: ["metadata.labels.[config.pg.lab/uwm-storage]"]
+        options: {create: true}

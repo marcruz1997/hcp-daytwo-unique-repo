@@ -1,0 +1,12 @@
+# Day-2: Cluster Logging + ClusterLogForwarder -> LokiStack (policy feature-logging).
+# Já inclui o loki: NÃO liste features/loki junto.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+components:
+  - ../loki
+patches:
+  - target: {kind: ManagedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/feature.pg.lab~1logging
+        value: "true"

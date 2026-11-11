@@ -1,0 +1,26 @@
+# O que este cluster tem. Cada linha de "components" liga um tamanho ou uma feature.
+# ORDEM IMPORTA:
+#   1. worker-size   2. infra-nodes + infra-size   3. features e oauth/ntp/etcd-backup
+#   4. apply-params SEMPRE POR ÚLTIMO
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../provisioning/base
+  - params.yaml
+components:
+  # --- workers: demo | small | medium | large | xlarge ---
+  - ../../../provisioning/components/worker-size/small
+  # --- nós de infra (remova as 2 linhas para não ter) ---
+  - ../../../provisioning/components/infra-nodes
+  - ../../../provisioning/components/infra-size/demo
+  # --- features (comente/descomente) ---
+  - ../../../provisioning/components/oauth-htpasswd
+  - ../../../provisioning/components/ntp
+  - ../../../provisioning/components/etcd-backup
+  - ../../../provisioning/components/features/ingress
+  # - ../../../provisioning/components/features/registry
+  # - ../../../provisioning/components/features/observability
+  # - ../../../provisioning/components/features/logging     # já inclui o loki
+  # - ../../../provisioning/components/features/loki        # só loki, sem logging
+  # --- sempre por último ---
+  - ../../../provisioning/components/apply-params

@@ -1,0 +1,105 @@
+# Day-2 por feature. Cada policy vai SÓ para os clusters com o label feature.pg.lab/<feature>=true,
+# que os components provisioning/components/features/* colocam no ManagedCluster.
+# Parâmetros (réplicas, tamanhos, retenção) chegam pelos labels config.pg.lab/* via hub templates.
+#
+# Features que NÃO aparecem aqui porque vivem no hub (policy de provisionamento do cluster):
+# infra-nodes, ntp, etcd-backup e a parte de IdP do oauth-htpasswd.
+apiVersion: policy.open-cluster-management.io/v1
+kind: PolicyGenerator
+metadata:
+  name: feature-policies
+placementBindingDefaults:
+  name: feature-policies-binding
+policyDefaults:
+  namespace: pg-policies-features
+  remediationAction: enforce
+  severity: medium
+  complianceType: musthave
+  # Desligar uma feature NÃO apaga o que já foi criado no cluster (seguro).
+  pruneObjectBehavior: None
+  categories: ["CM Configuration Management"]
+  standards: ["NIST SP 800-53"]
+  controls: ["CM-2 Baseline Configuration"]
+policies:
+  - name: feature-oauth-htpasswd
+    placement:
+      name: pl-feature-oauth-htpasswd
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/oauth-htpasswd, operator: In, values: ["true"]}
+    manifests:
+      - path: manifests/oauth-htpasswd
+
+  - name: feature-registry
+    placement:
+      name: pl-feature-registry
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/registry, operator: In, values: ["true"]}
+    orderManifests: true
+    consolidateManifests: false
+    manifests:
+      - path: manifests/registry/01-pvc.yaml
+      - path: manifests/registry/02-config.yaml
+
+  - name: feature-ingress
+    placement:
+      name: pl-feature-ingress
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/ingress, operator: In, values: ["true"]}
+    manifests:
+      - path: manifests/ingress
+
+  - name: feature-loki
+    placement:
+      name: pl-feature-loki
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/loki, operator: In, values: ["true"]}
+    orderManifests: true
+    consolidateManifests: false
+    manifests:
+      - path: manifests/loki/01-namespaces.yaml
+      - path: manifests/loki/02-operator.yaml
+      - path: manifests/loki/03-s3-secret.yaml
+      - path: manifests/loki/04-lokistack.yaml
+
+  - name: feature-logging
+    placement:
+      name: pl-feature-logging
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/logging, operator: In, values: ["true"]}
+    orderManifests: true
+    consolidateManifests: false
+    manifests:
+      - path: manifests/logging/01-namespace.yaml
+      - path: manifests/logging/02-operator.yaml
+      - path: manifests/logging/03-rbac.yaml
+      - path: manifests/logging/04-clusterlogforwarder.yaml
+
+  - name: feature-observability
+    placement:
+      name: pl-feature-observability
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/observability, operator: In, values: ["true"]}
+    orderManifests: true
+    consolidateManifests: false
+    manifests:
+      - path: manifests/observability/01-cluster-monitoring-config.yaml
+      - path: manifests/observability/02-uwm-config.yaml
+      - path: manifests/observability/03-coo-namespace.yaml
+      - path: manifests/observability/04-coo-operator.yaml
+
+  # Plugin de logs no console: só quando o cluster tem logging E observability (precisa do COO).
+  - name: feature-logging-ui
+    placement:
+      name: pl-feature-logging-ui
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/logging, operator: In, values: ["true"]}
+          - {key: feature.pg.lab/observability, operator: In, values: ["true"]}
+    manifests:
+      - path: manifests/logging-ui

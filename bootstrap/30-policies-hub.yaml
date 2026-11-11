@@ -1,0 +1,22 @@
+# Policy que copia o pull-secret do hub para clusters/hcp-pull-secret.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pg-policies-hub
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/marcruz1997/lab-hcp-policygenerator.git
+    targetRevision: main
+    path: policies/hub
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pg-policies-hub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff: {duration: 30s, factor: 2, maxDuration: 5m}

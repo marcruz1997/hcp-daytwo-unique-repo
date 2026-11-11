@@ -1,0 +1,10 @@
+# Base de um hosted cluster. Os placeholders (CLUSTER, RELEASE_IMAGE, ...) são
+# substituídos pelo component "apply-params" a partir do params.yaml de cada cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - hostedcluster.yaml
+  - nodepool-worker.yaml
+  - ssh-secret.yaml
+  - managedcluster.yaml
+  - klusterletaddonconfig.yaml

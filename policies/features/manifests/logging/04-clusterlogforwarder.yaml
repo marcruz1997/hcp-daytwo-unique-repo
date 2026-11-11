@@ -1,0 +1,43 @@
+# Mesmo padrão do pctvirh001: app + infra + audit -> LokiStack local.
+apiVersion: observability.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  name: logging
+  namespace: openshift-logging
+spec:
+  managementState: Managed
+  serviceAccount:
+    name: logcollector
+  collector:
+    tolerations:
+      - operator: Exists
+  filters:
+    - name: multiline
+      type: detectMultilineException
+  outputs:
+    - name: default-lokistack
+      type: lokiStack
+      lokiStack:
+        authentication:
+          token:
+            from: serviceAccount
+        target:
+          name: logging-loki
+          namespace: openshift-logging
+      tls:
+        ca:
+          configMapName: openshift-service-ca.crt
+          key: service-ca.crt
+  pipelines:
+    - name: apps
+      inputRefs: [application]
+      filterRefs: [multiline]
+      outputRefs: [default-lokistack]
+    - name: infrastructure-logs
+      inputRefs: [infrastructure]
+      filterRefs: [multiline]
+      outputRefs: [default-lokistack]
+    - name: audit-logs
+      inputRefs: [audit]
+      filterRefs: [multiline]
+      outputRefs: [default-lokistack]

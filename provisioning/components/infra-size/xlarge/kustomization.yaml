@@ -1,0 +1,18 @@
+# Nós de infra tamanho "xlarge": 32 cores, 128Gi, disco 200Gi (por nó).
+# Para mudar o tamanho para todos os clusters, edite este arquivo.
+# Use DEPOIS do component infra-nodes.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: NodePool
+      labelSelector: pg.lab/pool=infra
+    patch: |-
+      - op: replace
+        path: /spec/platform/kubevirt/compute
+        value:
+          cores: 32
+          memory: 128Gi
+      - op: replace
+        path: /spec/platform/kubevirt/rootVolume/persistent/size
+        value: 200Gi

@@ -1,0 +1,34 @@
+# Backup diário do etcd do control plane (roda no hub, guarda num PVC em hcp-etcd-backup).
+# Horário/retenção: edite resources.yaml (schedule / RETENTION_DAYS).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - resources.yaml
+patches:
+  - target: {kind: ManagedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/feature.pg.lab~1etcd-backup
+        value: "true"
+replacements:
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.name}
+    targets:
+      # etcd-backup-<nome>
+      - select: {kind: PersistentVolumeClaim, labelSelector: pg.lab/role=etcd-backup}
+        fieldPaths: [metadata.name]
+        options: {delimiter: "-", index: 2}
+      - select: {kind: CronJob, labelSelector: pg.lab/role=etcd-backup}
+        fieldPaths:
+          - metadata.name
+          - "spec.jobTemplate.spec.template.spec.volumes.[name=backup].persistentVolumeClaim.claimName"
+        options: {delimiter: "-", index: 2}
+      # clusters-<nome>
+      - select: {kind: CronJob, labelSelector: pg.lab/role=etcd-backup}
+        fieldPaths: ["spec.jobTemplate.spec.template.spec.containers.[name=backup].env.[name=CP_NS].value"]
+        options: {delimiter: "-", index: 1}
+      - select: {kind: Role, labelSelector: pg.lab/role=etcd-backup}
+        fieldPaths: [metadata.namespace]
+        options: {delimiter: "-", index: 1}
+      - select: {kind: RoleBinding, labelSelector: pg.lab/role=etcd-backup}
+        fieldPaths: [metadata.namespace]
+        options: {delimiter: "-", index: 1}

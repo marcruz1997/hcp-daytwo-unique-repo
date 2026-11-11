@@ -1,0 +1,3 @@
+# O Argo renderiza esta pasta: o PolicyGenerator transforma cluster/ numa Policy.
+generators:
+  - policyGenerator.yaml

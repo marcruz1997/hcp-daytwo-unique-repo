@@ -1,0 +1,36 @@
+# Parâmetros deste cluster. NÃO é aplicado no cluster (local-config): só alimenta os components.
+apiVersion: pg.lab/v1
+kind: ClusterParams
+metadata:
+  name: params
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  name: teste-pg01                     # único; vira HostedCluster, ManagedCluster e namespace
+  env: dev
+  # Versão (mudar depois = upgrade). Disponíveis: oc get clusterimagesets
+  releaseImage: quay.io/openshift-release-dev/ocp-release:4.18.60-multi
+  clusterNetwork: 10.132.0.0/14
+  serviceNetwork: 172.31.0.0/16
+  workerReplicas: 2                    # número, SEM aspas
+  infraReplicas: 3                     # número, SEM aspas (só com infra-nodes)
+  sshPublicKey: "ssh-rsa AAAA...COLE-SUA-CHAVE-PUBLICA..."
+
+  # ---- usados só se o component correspondente estiver ligado ----
+  # Valores de label: SEMPRE entre aspas.
+  oauth:                               # oauth-htpasswd
+    adminUser: "admin"
+    htpasswd: |
+      admin:$2y$05$TROQUE-PELO-HASH (htpasswd -nbB admin 'senha')
+  ingress:                             # features/ingress (<= nº de nós de infra)
+    replicas: "3"
+  observability:                       # features/observability
+    prometheusRetention: "7d"
+    prometheusStorage: "20Gi"
+    alertmanagerStorage: "5Gi"
+    uwmRetention: "7d"
+    uwmStorage: "20Gi"
+  loki:                                # features/loki ou features/logging
+    size: "1x.demo"
+    retentionDays: "7"
+    s3Scheme: "http"

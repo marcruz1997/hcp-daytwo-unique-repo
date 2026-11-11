@@ -1,0 +1,27 @@
+# Nós de infra: NodePool <nome>-infra com label/taint de infra.
+# Tamanho: component infra-size/<size> (DEPOIS deste). Réplicas: spec.infraReplicas no params.yaml.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - nodepool-infra.yaml
+patches:
+  # router/registry/monitoring/loki passam a rodar só nos nós de infra
+  - target: {kind: NodePool, labelSelector: pg.lab/pool=worker}
+    patch: |-
+      - op: remove
+        path: /spec/nodeLabels/hcp.lab~1infra-workloads
+  - target: {kind: ManagedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/feature.pg.lab~1infra-nodes
+        value: "true"
+replacements:
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.name}
+    targets:
+      - select: {kind: NodePool, labelSelector: pg.lab/pool=infra}
+        fieldPaths: [metadata.name]
+        options: {delimiter: "-", index: 0}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.infraReplicas}
+    targets:
+      - select: {kind: NodePool, labelSelector: pg.lab/pool=infra}
+        fieldPaths: [spec.replicas]
