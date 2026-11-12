@@ -1,4 +1,4 @@
-# Workers tamanho "large": 16 cores, 64Gi, disco 150Gi (por nó).
+# Workers tamanho "large": 16 cores, 64Gi, disco 120Gi (por nó).
 # Para mudar o tamanho para todos os clusters, edite este arquivo.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
@@ -14,4 +14,4 @@ patches:
           memory: 64Gi
       - op: replace
         path: /spec/platform/kubevirt/rootVolume/persistent/size
-        value: 150Gi
+        value: 120Gi
