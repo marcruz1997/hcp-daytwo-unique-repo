@@ -127,7 +127,7 @@ oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-foun
 
 1. Troque a URL do repo se o nome for outro:
    ```bash
-   grep -rl lab-hcp-policygenerator bootstrap | xargs sed -i '' 's#marcruz1997/lab-hcp-policygenerator#SEU_ORG/SEU_REPO#'
+   grep -rl lab-hcp-policygenerator bootstrap | xargs sed -i '' 's#marcruz1997/hcp-lab-day-two-policies#SEU_ORG/SEU_REPO#'
    ```
 2. Pré-requisitos no hub (iguais ao outro repo): OpenShift GitOps com o plugin do PolicyGenerator,
    ACM/MCE com HyperShift, OpenShift Virtualization, MetalLB (APIServer LoadBalancer).
