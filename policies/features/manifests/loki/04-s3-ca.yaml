@@ -1,9 +1,0 @@
-# CA do ingress do hub (onde fica a Route S3 do NooBaa), para o Loki confiar no endpoint https.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: loki-s3-ca
-  namespace: openshift-logging
-data:
-  service-ca.crt: |
-    {{hub fromConfigMap "pg-policies-features" "loki-s3-endpoint" "ca-bundle.crt" | autoindent hub}}

@@ -7,9 +7,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/marcruz1997/hcp-lab-day-two-policies.git
-    targetRevision: main
-    path: policies/features
+    repoURL: https://github.com/marcruz1997/hcp-modules-policies.git
+    targetRevision: v1.0.0         # versão do catálogo; suba junto com a maior versão usada pelos clusters
+    path: policies
   destination:
     server: https://kubernetes.default.svc
     namespace: pg-policies-features

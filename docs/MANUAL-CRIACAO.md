@@ -9,13 +9,13 @@ Para entender e investigar as policies, veja [LEITURA-POLICIES.md](LEITURA-POLIC
 
 | O quê | Onde | Como |
 |---|---|---|
-| Chave SSH pública padrão | `provisioning/base/params-defaults.yaml` → `sshPublicKey` | `cat ~/.ssh/hcp-clusters.pub` |
-| Servidores NTP | `provisioning/features/ntp/chrony-configmap.yaml` | `scripts/chrony-b64.sh ntp1 ntp2` e cole o resultado na linha `source:` |
-| Horário e retenção do backup do etcd | `provisioning/features/etcd-backup/resources.yaml` | `schedule` e `RETENTION_DAYS` |
+| Chave SSH pública padrão | `docs/cluster-template/cluster/params.yaml` → `sshPublicKey` (vale para os clusters criados depois) | `cat ~/.ssh/hcp-clusters.pub` |
+| Servidores NTP | repo **hcp-modules-policies**: `features/ntp/chrony-configmap.yaml` (nova versão do catálogo) | `scripts/chrony-b64.sh ntp1 ntp2` (no hcp-modules-policies) e cole na linha `source:` |
+| Horário e retenção do backup do etcd | repo **hcp-modules-policies**: `features/etcd-backup/resources.yaml` (nova versão do catálogo) | `schedule` e `RETENTION_DAYS` |
 | S3 para o Loki (só se usar loki/logging) | Hub | `oc get sc \| grep noobaa` e `oc -n openshift-storage get route s3` devem existir (ODF com MCG). Endpoint e CA são descobertos automaticamente pela policy `loki-s3-endpoint` |
 
-> Os valores em `params-defaults.yaml` valem para **todos** os clusters que não os sobrescreverem.
-> Senha de admin: defina **uma por cluster** (seção 3). Não dependa do padrão.
+> O `params.yaml` do template é o ponto de partida de **todo cluster novo**: ajuste ali os valores comuns.
+> Senha de admin: defina **uma por cluster** (seção 3.2). Não dependa do valor do template.
 
 ---
 
@@ -24,14 +24,21 @@ Para entender e investigar as policies, veja [LEITURA-POLICIES.md](LEITURA-POLIC
 Nome: minúsculas, números e `-` (ex.: `app01`, `hml-pagamentos`).
 
 ```bash
-scripts/new-cluster.sh app01
+scripts/new-cluster.sh app01                 # usa ~/.ssh/hcp-clusters.pub, id_ed25519.pub ou id_rsa.pub
+scripts/new-cluster.sh app01 ~/chave.pub     # ou indique a chave pública
 ```
+
+O script já preenche o **nome**, a **chave SSH** e pede a **senha do admin** (gera o hash com
+`htpasswd`, pacote `httpd-tools`). Se não achar a chave ou o `htpasswd`, ele avisa o que falta.
+O cluster sai com os módulos padrão (workers `small`, login htpasswd, NTP, backup do etcd, router):
+se for isso que você quer, pule direto para a seção 4.
 
 Isso cria `clusters/app01/` a partir de `docs/cluster-template/`:
 
 ```
 clusters/app01/
-  cluster/kustomization.yaml   <- VOCÊ EDITA SÓ ESTE
+  cluster/kustomization.yaml   <- VOCÊ EDITA: quais módulos o cluster tem
+  cluster/params.yaml          <- VOCÊ EDITA: os valores do cluster
   policy.yaml                  <- fixo (nome já preenchido)
   kustomization.yaml           <- fixo
 ```
@@ -43,25 +50,43 @@ Sem o script (VS Code): copie `docs/cluster-template` para `clusters/app01` e tr
 
 ## 3. Declarar o cluster
 
-Abra `clusters/app01/cluster/kustomization.yaml`. São três blocos:
+São dois arquivos em `clusters/app01/cluster/`: `kustomization.yaml` (o que o cluster tem) e
+`params.yaml` (os valores). Os módulos vêm do catálogo [hcp-modules-policies](https://github.com/marcruz1997/hcp-modules-policies), sempre com versão (`?ref=`).
 
-### 3.1 `components`: o que o cluster tem
+### 3.1 `kustomization.yaml`: os módulos
 
-Uma linha por item. **A ordem não importa.**
+Uma linha por módulo; comente para desligar. **A ordem não importa**, exceto: `infra/<size>` antes de
+`features/ntp`.
 
-| Linha | Efeito |
+```yaml
+resources:
+  - https://github.com/marcruz1997/hcp-modules-policies//base?ref=v1.0.0          # obrigatório
+  - params.yaml
+components:
+  - https://github.com/marcruz1997/hcp-modules-policies//workers/small?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//infra/small?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//features/oauth-htpasswd?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//features/ingress?ref=v1.0.0
+transformers:
+  - https://github.com/marcruz1997/hcp-modules-policies//apply-params?ref=v1.0.0  # obrigatório, não mexa
+```
+
+| Módulo | Efeito |
 |---|---|
 | `workers/<size>` | Tamanho dos workers (obrigatório ter um) |
 | `infra/<size>` | Cria o NodePool de infra já no tamanho |
 | `features/oauth-htpasswd` | Login htpasswd + cluster-admin para o `adminUser` |
 | `features/oauth-entraid` | Login Microsoft Entra ID + cluster-admin para um grupo (ver 3.1.2). Pode ficar junto com o htpasswd |
-| `features/ntp` | chrony em todos os nós |
+| `features/proxy` | Proxy corporativo de saída (`proxy.*` no `params.yaml`). **Faz rollout dos nós** |
+| `features/ntp` | chrony em todos os nós (depois de `infra/<size>`) |
 | `features/etcd-backup` | Snapshot diário do etcd (no hub) |
 | `features/ingress` | Router nos nós de infra |
 | `features/registry` | Image registry interno com PVC |
 | `features/observability` | Prometheus/Alertmanager persistentes + user workload + COO |
 | `features/logging` | Logging (app, infra, audit) → Loki. **Já inclui o loki** (tamanho: `loki.size`, ver 3.1.1) |
 | `features/loki` | Só o Loki (use apenas sem `logging`; tamanho: `loki.size`) |
+
+Detalhes de cada módulo e parâmetros: README do [hcp-modules-policies](https://github.com/marcruz1997/hcp-modules-policies).
 
 Tamanhos (`demo` só para lab):
 
@@ -73,10 +98,14 @@ Tamanhos (`demo` só para lab):
 | large | 16 | 64Gi | 120Gi |
 | xlarge | 32 | 128Gi | 120Gi |
 
+**Versões:** use a mesma versão em todas as linhas, ou versões da **mesma versão maior**
+(ex.: `base?ref=v1.0.0` com `features/oauth-entraid?ref=v1.2.0`). O que mudou em cada versão está no
+`CHANGELOG.md` do hcp-modules-policies.
+
 #### 3.1.1 Tamanho do Loki (`loki.size`)
 
-Com `features/logging` ou `features/loki`, o tamanho da instância vem de `loki.size` no patch
-(padrão: `1x.demo`, em `provisioning/base/params-defaults.yaml`).
+Com `features/logging` ou `features/loki`, o tamanho da instância vem de `loki.size` no `params.yaml`
+(no `params.yaml`; o template vem com `1x.demo`).
 
 | `loki.size` | Uso | Alta disponibilidade | Suporte Red Hat | Nós de infra sugeridos |
 |---|---|---|---|---|
@@ -102,14 +131,14 @@ spec:
      ```bash
      oc -n clusters-app01 get route oauth -o jsonpath='{.spec.host}{"\n"}'
      ```
-     (o cluster precisa existir: dá para ligar a feature depois de criado)
+     (o cluster precisa existir: dá para ligar o módulo depois de criado)
    - **Token configuration** → *Add groups claim* → *Security groups*.
    - **Certificates & secrets** → *New client secret* (copie o *Value*).
 2. Crie o Secret no hub (**fora do Git**):
    ```bash
    oc -n clusters create secret generic entraid-app01 --from-literal=clientSecret='<valor>'
    ```
-3. No patch do cluster:
+3. No `params.yaml`:
    ```yaml
    entraid:
      tenantId: "<Directory (tenant) ID>"
@@ -119,44 +148,44 @@ spec:
 4. Descomente `features/oauth-entraid` e faça push. Na tela de login aparecem `entraid` e, se
    ligado, `htpasswd` (bom como acesso de emergência).
 
-### 3.2 `patches`: só o que muda em relação ao padrão
+### 3.2 `params.yaml`: os valores
+
+O template já vem com **todos os campos comentados linha a linha**: o que é, formato, como descobrir o
+valor (ex.: as redes do hub para não sobrepor pod/service network), o que é imutável e o que recria
+os nós. O `kustomization.yaml` do template também traz o impacto de ligar cada módulo. Ajuste o que for
+deste cluster:
 
 ```yaml
-patches:
-  - target: {kind: ClusterParams}
-    patch: |-
-      kind: ClusterParams
-      metadata: {name: params}
-      spec:
-        name: app01                       # OBRIGATÓRIO
-        env: prd
-        releaseImage: quay.io/openshift-release-dev/ocp-release:4.18.60-multi
-        workerReplicas: 3                 # número, SEM aspas
-        infraReplicas: 3                  # número, SEM aspas
-        oauth:
-          htpasswd: |                     # htpasswd -nbB admin 'senha-forte'
-            admin:$2y$05$...
-        ingress: {replicas: "3"}          # ENTRE aspas
-        observability: {prometheusRetention: "15d", prometheusStorage: "100Gi"}
-        loki: {size: "1x.small", retentionDays: "15"}
+spec:
+  name: app01                       # OBRIGATÓRIO (já preenchido pelo script)
+  env: prd
+  releaseImage: quay.io/openshift-release-dev/ocp-release:4.18.60-multi
+  workerReplicas: 3                 # número, SEM aspas
+  infraReplicas: 3                  # número, SEM aspas
+  oauth:
+    htpasswd: |                     # htpasswd -nbB admin 'senha-forte'
+      admin:$2y$05$...
+  ingress: {replicas: "3"}          # ENTRE aspas
+  observability: {prometheusRetention: "15d", prometheusStorage: "100Gi"}
+  loki: {size: "1x.small", retentionDays: "15"}
 ```
 
-Todos os campos possíveis e seus padrões: `provisioning/base/params-defaults.yaml`.
+Só as seções dos módulos ligados são lidas. Todos os campos: `examples/params.yaml` do hcp-modules-policies.
 
 **Regras rápidas**
 - `workerReplicas` / `infraReplicas`: números **sem** aspas.
-- Tudo de `ingress`, `observability`, `loki`, `oauth.adminUser`: **entre aspas** (viram labels).
+- Tudo de `ingress`, `observability`, `loki`, `oauth.adminUser`, `entraid`: **entre aspas** (viram labels).
 - `ingress.replicas` ≤ `infraReplicas` (1 router por nó). Sem infra: ≤ `workerReplicas`.
-- Indentação dentro do `patch: |-` igual ao exemplo (é o erro de build mais comum).
+- Módulo ligado sem a sua seção no `params.yaml` = erro de build (`fieldPath ... is missing`).
 
 ### 3.3 `transformers`: não mexa
 
 ```yaml
-transformers: [../../../provisioning/apply-params]
+transformers:
+  - https://github.com/marcruz1997/hcp-modules-policies//apply-params?ref=v1.0.0
 ```
 
-Exemplo completo com tudo ligado: [README → Criar um cluster](../README.md) e o template em
-`docs/cluster-template/cluster/kustomization.yaml`.
+Exemplo completo: `docs/cluster-template/cluster/`.
 
 ---
 
@@ -195,7 +224,8 @@ oc login https://$API:6443 -u admin
 
 ## 6. Mudar um cluster existente
 
-Edite `clusters/app01/cluster/kustomization.yaml` e faça push. O ACM aplica sozinho.
+Edite `clusters/app01/cluster/kustomization.yaml` (módulos) ou `params.yaml` (valores) e faça push.
+O ACM aplica sozinho.
 
 | Mudança | Impacto |
 |---|---|
@@ -206,6 +236,7 @@ Edite `clusters/app01/cluster/kustomization.yaml` e faça push. O ACM aplica soz
 | Ligar ou mudar `ntp` | **Recria todos os nós** |
 | Trocar senha (`oauth.htpasswd`) | OAuth recarrega, nós intactos |
 | Ligar `oauth-entraid` | OAuth recarrega com o login do Entra ID, nós intactos |
+| Trocar a versão (`?ref=`) | O que a versão muda está no `CHANGELOG.md` do hcp-modules-policies (leia antes) |
 | Mudar `releaseImage` | **Upgrade** do cluster (control plane, depois workers) |
 | Tirar uma feature da lista | O label volta a `"false"` e a policy de day-2 sai do cluster, mas **não apaga** o que já criou |
 
@@ -238,11 +269,10 @@ oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-foun
 
 ## 8. Mudar padrões para todos os clusters
 
-| Quero mudar | Arquivo |
+| Quero mudar | Onde |
 |---|---|
-| Versão/rede/réplicas/ssh/admin padrão | `provisioning/base/params-defaults.yaml` |
-| O que é um "medium" | `provisioning/workers/medium/` ou `provisioning/infra/medium/` |
-| Servidores NTP | `provisioning/features/ntp/chrony-configmap.yaml` |
-| O que uma feature de day-2 aplica | `policies/features/manifests/<feature>/` |
+| Valores iniciais de clusters novos (versão, rede, réplicas, ssh, admin) | `docs/cluster-template/cluster/params.yaml` |
+| O que é um "medium", servidores NTP, horário do backup, o que uma feature aplica | repo **hcp-modules-policies** → PR + `CHANGELOG.md` + tag nova |
+| Usar a versão nova do catálogo | trocar `?ref=` nos clusters (e o `targetRevision` de `bootstrap/40-policies-features.yaml` se a versão mexer em `policies/`) |
 
-Mudanças aqui afetam **todos** os clusters que usam aquele item no próximo sync.
+Uma tag nova no hcp-modules-policies **não muda nenhum cluster** até alguém trocar o `?ref=` dele.

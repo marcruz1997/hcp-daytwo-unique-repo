@@ -1,8 +1,0 @@
-# Transformer final: copia os valores do ClusterParams (defaults da base + patch do cluster)
-# para os recursos. É usado em "transformers:" do cluster, por isso roda DEPOIS de todos os
-# components, e a ordem dos components não importa.
-# Cada alvo opcional é selecionado por label, então feature desligada = alvo ignorado.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - replacements.yaml

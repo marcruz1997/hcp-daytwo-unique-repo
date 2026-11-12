@@ -1,27 +1,71 @@
-# ================= CLUSTER teste-pg01 =================
-# Escolha o que o cluster tem (a ordem não importa) e sobrescreva só o que
-# for diferente dos defaults (provisioning/base/params-defaults.yaml).
+# =====================================================================================
+# MÓDULOS DO CLUSTER teste-pg01  (clusters/teste-pg01/cluster/kustomization.yaml)
+# =====================================================================================
+# Cada linha liga um módulo do catálogo hcp-modules-policies. Desligar = comentar a linha (# ).
+# Os módulos SEM "#" já vêm ligados e funcionam com os valores padrão do params.yaml:
+# para um cluster comum, não precisa mexer neste arquivo.
+# Os valores de cada módulo ficam em params.yaml (ao lado).
+#
+# Regras:
+#   - "base" em resources e "apply-params" em transformers são OBRIGATÓRIOS: não comente.
+#   - A ordem dos components não importa, EXCETO: infra/<size> antes de features/ntp.
+#   - ?ref=vX.Y.Z é a versão do módulo. Use a mesma em todas as linhas (ou versões da mesma
+#     versão maior, ex.: v1.0.0 com v1.2.0). O que muda em cada versão: CHANGELOG.md do hcp-modules-policies.
+#   - Não liste o mesmo módulo duas vezes (ex.: logging já inclui loki).
+#
+# Impacto num cluster que JÁ EXISTE:
+#   [RECRIA NÓS] = substitui as VMs, uma a uma      [SEM IMPACTO] = nós intactos
+#   Desligar um módulo de day-2 tira a policy do cluster, mas NÃO apaga o que ela já criou.
+# =====================================================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: [../../../provisioning/base]
+
+resources:
+  # Base: HostedCluster, NodePool de workers, ManagedCluster, chave SSH. OBRIGATÓRIO.
+  - https://github.com/marcruz1997/hcp-modules-policies//base?ref=v1.0.0
+  # Valores deste cluster.
+  - params.yaml
+
 components:
-  - ../../../provisioning/workers/small              # demo|small|medium|large|xlarge
-  - ../../../provisioning/infra/small                 # opcional: nós de infra
-  - ../../../provisioning/features/oauth-htpasswd
-  - ../../../provisioning/features/ntp
-  - ../../../provisioning/features/etcd-backup
-  - ../../../provisioning/features/ingress
-  - ../../../provisioning/features/logging
-  - ../../../provisioning/features/observability
-patches:
-  - target: {kind: ClusterParams}
-    patch: |-
-      kind: ClusterParams
-      metadata: {name: params}
-      spec:
-        name: teste-pg01
-        infraReplicas: 3
-        ingress: {replicas: "3"}
-        observability: {prometheusRetention: "7d", prometheusStorage: "100Gi"}
-        loki: {size: "1x.demo", retentionDays: "2"}
-transformers: [../../../provisioning/apply-params]
+  # ---------------- TAMANHO DOS WORKERS (obrigatório ter UM) ----------------
+  # Por nó: demo 2c/8Gi | small 4c/16Gi | medium 8c/32Gi | large 16c/64Gi | xlarge 32c/128Gi (disco 120Gi)
+  # Quantidade: workerReplicas no params.yaml.   Trocar o tamanho: [RECRIA NÓS]
+  - https://github.com/marcruz1997/hcp-modules-policies//workers/small?ref=v1.0.0
+
+  # ---------------- NÓS DE INFRA (opcional) ----------------
+  # NodePool <nome>-infra com label/taint de infra; router, registry, monitoring e loki vão para ele.
+  # Mesmos tamanhos dos workers. Quantidade: infraReplicas.   Ligar: cria VMs novas [SEM IMPACTO nos workers]
+  - https://github.com/marcruz1997/hcp-modules-policies//infra/small?ref=v1.0.0
+
+  # ---------------- REDE ----------------
+  # Proxy corporativo de saída (proxy.* no params.yaml).   [RECRIA NÓS]
+  # - https://github.com/marcruz1997/hcp-modules-policies//features/proxy?ref=v1.0.0
+
+  # ---------------- LOGIN (pode ligar os dois) ----------------
+  # Usuário/senha local + cluster-admin para oauth.adminUser (oauth.* no params.yaml).   [SEM IMPACTO]
+  - https://github.com/marcruz1997/hcp-modules-policies//features/oauth-htpasswd?ref=v1.0.0
+  # Microsoft Entra ID + cluster-admin para um grupo (entraid.* no params.yaml).   [SEM IMPACTO]
+  # Antes: Secret "entraid-teste-pg01" no namespace clusters do hub (README do hcp-modules-policies).
+  # - https://github.com/marcruz1997/hcp-modules-policies//features/oauth-entraid?ref=v1.0.0
+
+  # ---------------- NÓS E CONTROL PLANE ----------------
+  # NTP (chrony) em todos os nós. DEPOIS de infra/<size>.   [RECRIA NÓS]
+  - https://github.com/marcruz1997/hcp-modules-policies//features/ntp?ref=v1.0.0
+  # Backup diário do etcd (CronJob no hub, PVC em hcp-etcd-backup).   [SEM IMPACTO]
+  - https://github.com/marcruz1997/hcp-modules-policies//features/etcd-backup?ref=v1.0.0
+
+  # ---------------- DAY-2 DENTRO DO CLUSTER (policies) ----------------
+  # Router nos nós de infra + réplicas (ingress.replicas).   [SEM IMPACTO]
+  - https://github.com/marcruz1997/hcp-modules-policies//features/ingress?ref=v1.0.0
+  # Image registry interno com PVC de 100Gi.   [SEM IMPACTO]
+  # - https://github.com/marcruz1997/hcp-modules-policies//features/registry?ref=v1.0.0
+  # Prometheus/Alertmanager persistentes + user workload + COO (observability.*).   [SEM IMPACTO]
+  - https://github.com/marcruz1997/hcp-modules-policies//features/observability?ref=v1.0.0
+  # Logs (app, infra, audit) -> Loki. JÁ INCLUI o loki (loki.*).   [SEM IMPACTO]
+  - https://github.com/marcruz1997/hcp-modules-policies//features/logging?ref=v1.0.0
+  # Só o Loki, sem coletar logs (use apenas SEM logging).   [SEM IMPACTO]
+  # - https://github.com/marcruz1997/hcp-modules-policies//features/loki?ref=v1.0.0
+
+transformers:
+  # Aplica nome, versão, redes, réplicas e ssh em tudo. OBRIGATÓRIO e sempre por último.
+  - https://github.com/marcruz1997/hcp-modules-policies//apply-params?ref=v1.0.0

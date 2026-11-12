@@ -1,0 +1,149 @@
+# =====================================================================================
+# VALORES DO CLUSTER NOME (clusters/NOME/cluster/params.yaml)
+# =====================================================================================
+# >>> O MÍNIMO PARA CRIAR UM CLUSTER <<<
+#   1) scripts/new-cluster.sh <nome>   -> preenche name, sshPublicKey e a senha do admin
+#   2) git add clusters/<nome> && git commit -m "cria cluster <nome>" && git push
+# Todo o resto já vem com valores que funcionam. Mude só se precisar (comentários abaixo).
+#
+# Este arquivo NÃO é aplicado no cluster (local-config): só alimenta os módulos.
+# A parte "OBRIGATÓRIO" precisa existir (o script já preenche o que muda por cluster).
+# Das seções de módulos, só as dos módulos ligados em cluster/kustomization.yaml são lidas;
+# as outras podem ficar aqui sem efeito.
+#
+# Legenda dos comentários:
+#   [IMUTÁVEL]    não muda depois que o cluster existe (mudar = destruir e recriar)
+#   [RECRIA NÓS]  mudar num cluster existente substitui as VMs, uma a uma
+#   [LABEL]       vira label no ManagedCluster: valor ENTRE ASPAS, até 63 caracteres,
+#                 só letras, números, "-", "_" e "."
+#
+# Antes de escolher redes, veja as do hub (não podem se sobrepor):
+#   oc get network.config cluster -o jsonpath='{.spec.clusterNetwork[*].cidr} {.spec.serviceNetwork[*]}{"\n"}'
+#   oc get nodes -o wide        # faixa de IP dos nós do hub (machine network)
+# =====================================================================================
+apiVersion: pg.lab/v1
+kind: ClusterParams
+metadata:
+  name: params
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  # ================================== OBRIGATÓRIO ==================================
+
+  # Nome do cluster. [IMUTÁVEL]
+  # Vira: HostedCluster e ManagedCluster "<nome>", namespace do control plane "clusters-<nome>",
+  # namespace do ACM "<nome>", NodePools "<nome>" e "<nome>-infra", e o domínio *.apps do cluster.
+  # Regras: minúsculas, números e "-"; começa e termina com letra/número; prefira até 20 caracteres
+  # (nomes longos estouram limites de DNS/labels nos objetos derivados).
+  # Deve ser igual ao nome da pasta clusters/<nome>.
+  name: NOME
+
+  # Ambiente. [LABEL] Só identificação/filtro no ACM (label "env"); não muda nada no cluster.
+  # Exemplos: dev, hml, prd.
+  env: dev
+
+  # Versão do OpenShift (control plane E nós). Mudar = UPGRADE do cluster [RECRIA NÓS].
+  # Versões disponíveis no hub:
+  #   oc get clusterimagesets -o custom-columns=NAME:.metadata.name,IMAGE:.spec.releaseImage
+  # Use a imagem "-multi" (multi-arquitetura) ou a da arquitetura dos nós.
+  # Não pode ser MAIOR que a versão suportada pelo MCE/HyperShift do hub.
+  releaseImage: quay.io/openshift-release-dev/ocp-release:4.18.60-multi
+
+  # Rede dos PODS do cluster (pod network / clusterNetwork). [IMUTÁVEL]
+  # - Formato CIDR. /14 = até 512 nós (cada nó recebe um /23, hostPrefix padrão).
+  # - NÃO pode sobrepor: clusterNetwork e serviceNetwork do hub, a rede dos nós do hub
+  #   e redes corporativas que os pods precisem alcançar.
+  # - Pode repetir entre hosted clusters diferentes (cada cluster tem a sua rede isolada).
+  # Padrão do OpenShift no hub costuma ser 10.128.0.0/14; por isso aqui 10.132.0.0/14.
+  clusterNetwork: 10.132.0.0/14
+
+  # Rede dos SERVICES do cluster (service network). [IMUTÁVEL]
+  # - Formato CIDR, normalmente /16.
+  # - Mesmas regras de sobreposição da clusterNetwork (o hub costuma usar 172.30.0.0/16).
+  serviceNetwork: 172.31.0.0/16
+
+  # Quantidade de nós de trabalho (workers). Número SEM aspas.
+  # Mudar adiciona/remove VMs. O tamanho de cada nó vem do módulo workers/<size>.
+  # Sem infra/<size>, router/registry/monitoring rodam aqui: use 2 ou mais.
+  workerReplicas: 2
+
+  # Chave SSH PÚBLICA para acesso de emergência aos nós (usuário "core"). [RECRIA NÓS]
+  # Uma linha, entre aspas:  cat ~/.ssh/hcp-clusters.pub
+  # NUNCA coloque a chave privada.
+  sshPublicKey: "ssh-rsa AAAA...COLE-SUA-CHAVE-PUBLICA..."
+
+  # ============================ POR MÓDULO (se ligado) =============================
+
+  # ---- infra/<size>: nós dedicados de infra ------------------------------------------
+  # Número de nós de infra, SEM aspas. Router, registry, monitoring e loki vão para eles.
+  # Mínimo recomendado: 3 (alta disponibilidade do router e do monitoring).
+  infraReplicas: 3
+
+  # ---- features/proxy: proxy corporativo de saída [RECRIA NÓS] --------------------------
+  # Use quando o cluster só sai para a internet/registries via proxy.
+  proxy:
+    httpProxy: "http://proxy.empresa.local:3128"     # URL do proxy para HTTP
+    httpsProxy: "http://proxy.empresa.local:3128"    # URL do proxy para HTTPS (geralmente a mesma)
+    # O que NÃO passa pelo proxy, separado por vírgula. Inclua:
+    #   - domínios internos da empresa (ex.: .empresa.local) e o domínio do hub (*.apps do hub)
+    #   - redes internas que os pods acessam direto (ex.: 10.0.0.0/8)
+    # As redes do próprio cluster (pods, services) e .cluster.local/.svc o OpenShift já acrescenta.
+    noProxy: ".empresa.local,.apps.hub.empresa.local,10.0.0.0/8"
+    # Proxy com certificado próprio (CA corporativa) ainda não é coberto por este módulo.
+
+  # ---- features/oauth-htpasswd: login local com usuário e senha ------------------------------
+  oauth:
+    # Usuário que recebe cluster-admin. [LABEL] Tem que existir no htpasswd abaixo.
+    adminUser: "admin"
+    # Uma linha "usuario:hash" por usuário. Gere o hash com (custo 12, bcrypt):
+    #   htpasswd -nbBC 12 admin 'SenhaForte'
+    # Use uma senha DIFERENTE por cluster. O repo é público: o hash fica visível.
+    htpasswd: |
+      admin:TROQUE-PELO-HASH
+
+  # ---- features/oauth-entraid: login Microsoft Entra ID ------------------------------------
+  # Valores do "App registration" no portal do Entra ID (passo a passo: docs/MANUAL-CRIACAO.md, seção 3.1.2).
+  # O client secret NÃO fica aqui: Secret "entraid-<nome>" no namespace clusters do hub.
+  entraid:
+    tenantId: "00000000-0000-0000-0000-000000000000"     # Directory (tenant) ID
+    clientId: "00000000-0000-0000-0000-000000000000"     # Application (client) ID
+    adminGroup: "00000000-0000-0000-0000-000000000000"   # [LABEL] Object ID do grupo que vira cluster-admin
+
+  # ---- features/ingress: router (*.apps do cluster) -----------------------------------------
+  ingress:
+    # [LABEL] Réplicas do router. Com infra: <= infraReplicas. Sem infra: <= workerReplicas.
+    replicas: "2"
+
+  # ---- features/observability: monitoring persistente + user workload ------------------------
+  # Todos [LABEL]. Retenção: número + unidade (h, d, w). Storage: tamanho do PVC (Gi).
+  # Cada PVC é criado na StorageClass padrão do cluster; aumentar depois exige expandir o PVC.
+  observability:
+    prometheusRetention: "7d"     # quanto tempo o Prometheus da plataforma guarda métricas
+    prometheusStorage: "20Gi"     # disco de CADA réplica do Prometheus da plataforma
+    alertmanagerStorage: "5Gi"    # disco de cada réplica do Alertmanager
+    uwmRetention: "7d"            # retenção do Prometheus de user workload (apps)
+    uwmStorage: "20Gi"            # disco de cada réplica do Prometheus de user workload
+
+  # ---- features/loki e features/logging: logs ----------------------------------------------
+  loki:
+    # [LABEL] Tamanho do LokiStack: 1x.demo (só lab, sem HA e sem suporte) | 1x.pico |
+    # 1x.extra-small | 1x.small | 1x.medium. Produção: a partir de 1x.pico, com infra/medium ou maior.
+    size: "1x.demo"
+    # [LABEL] Dias de retenção dos logs (número entre aspas).
+    retentionDays: "7"
+    # StorageClass de BUCKET do hub (ObjectBucketClaim). Endpoint S3 e CA são descobertos sozinhos.
+    #   oc get storageclass | grep -E 'noobaa|rgw'
+    bucketStorageClass: openshift-storage.noobaa.io
+
+# =====================================================================================
+# O QUE NÃO É PARÂMETRO (fixo na base desta versão do hcp-modules-policies)
+# Para mudar, é uma versão nova do hcp-modules-policies (PR + CHANGELOG + tag), não este arquivo:
+#   - Plataforma: KubeVirt (VMs no OpenShift Virtualization do hub), *.apps via passthrough do hub
+#   - etcd: gerenciado, PVC de 8Gi na StorageClass ocs-external-storagecluster-ceph-rbd-immediate
+#   - Alta disponibilidade do control plane e da infra: HighlyAvailable
+#   - Publicação: API por LoadBalancer (MetalLB no hub); OAuth, OIDC, Konnectivity e Ignition por Route
+#   - Tipo de rede: OVNKubernetes; hostPrefix /23
+#   - Pull secret: copiado do hub (policy hcp-pull-secret)
+#   - Servidores NTP: features/ntp/chrony-configmap.yaml | horário do backup: features/etcd-backup
+#   - Tamanhos de nó (cores/memória/disco): workers/<size> e infra/<size>
+# =====================================================================================

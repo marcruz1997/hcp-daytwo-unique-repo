@@ -115,9 +115,11 @@ oc -n pg-provisioning get policy hcp-app01 -o json | jq '.spec["policy-templates
 | Mensagem | Causa | Correção |
 |---|---|---|
 | `authentication required` / `Repository not found` | URL do repo errada ou repo privado sem credencial | `bootstrap/*` com a URL certa; credencial em Argo → Settings → Repositories |
-| erro de YAML / `mapping values are not allowed` | Indentação no `patch: \|-` | Alinhar como no template |
+| erro de YAML / `mapping values are not allowed` | Indentação no `params.yaml` | Alinhar como no template |
+| `fieldPath ... is missing for replacement source` | Módulo ligado sem a sua seção no `params.yaml` | Copiar a seção do template / `examples/params.yaml` do hcp-modules-policies |
+| `failed to run git ... ` / `unknown revision` | Tag do `?ref=` não existe no hcp-modules-policies | Conferir as tags (`git ls-remote --tags`) |
 | `may not add resource with an already registered id` | Item listado duas vezes (ex.: `logging` + `loki`) | Remover o duplicado |
-| `nothing selected by ...` / `fieldPath not found` | Component novo sem label/replacement correto | Ver README → Criar um component novo |
+| `nothing selected by ...` / `fieldPath not found` | Módulo novo sem label/replacement correto | README do hcp-modules-policies → Criar um módulo novo |
 
 ### App no Argo **Degraded** (policy NonCompliant)
 Leia o motivo (seção 4). Mensagens comuns:

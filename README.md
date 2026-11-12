@@ -1,95 +1,104 @@
 # HCP via ACM PolicyGenerator: provisionamento e day-2 por policies
 
-Versão alternativa do `lab-hcp-day-two`: aqui **o próprio cluster é criado por uma Policy**.
-O Argo CD só leva as policies do Git para o hub; quem cria e mantém HostedCluster, NodePools e
-ManagedCluster é o ACM (`enforce` no `local-cluster`). Tudo aparece em **Governance**.
+Aqui **o próprio cluster é criado por uma Policy**. O Argo CD só leva as policies do Git para o hub;
+quem cria e mantém HostedCluster, NodePools e ManagedCluster é o ACM (`enforce` no `local-cluster`).
+Tudo aparece em **Governance**.
 
-## Como Terraform
+Este repo guarda **os clusters**. As peças reutilizáveis (base, tamanhos, features e as policies de
+day-2) ficam no catálogo versionado **[hcp-modules-policies](https://github.com/marcruz1997/hcp-modules-policies)**, e cada
+cluster escolhe os módulos por URL + versão.
 
-| Terraform | Aqui |
+## Como funciona (GitOps)
+
+| O quê | Onde fica |
 |---|---|
-| módulo (`module "ntp" { source = ... }`) | component em `provisioning/` (ex.: `provisioning/features/ntp`) |
-| `main.tf` + `terraform.tfvars` | **um arquivo por cluster**: `clusters/<nome>/cluster/kustomization.yaml` (lista `components` = módulos ligados; `patches` = valores) |
-| defaults do `variables.tf` | `provisioning/base/params-defaults.yaml` |
-| `terraform plan` | diff da Application `pg-<nome>` no Argo CD |
-| `terraform apply` | `git push` (o Argo sincroniza e o ACM aplica só a diferença) |
-| state | o próprio cluster: o ACM compara o desejado com o que está rodando |
+| Quais módulos o cluster tem | `clusters/<nome>/cluster/kustomization.yaml` (uma linha por módulo, com `?ref=<versão>`) |
+| Valores do cluster | `clusters/<nome>/cluster/params.yaml` |
+| Catálogo de módulos e policies de day-2 | repo [hcp-modules-policies](https://github.com/marcruz1997/hcp-modules-policies), versionado por tag |
+| Ver o que vai mudar | diff da Application `pg-<nome>` no Argo CD |
+| Aplicar | `git push`: o Argo sincroniza e o ACM aplica só a diferença |
+| Estado real | o próprio cluster: o ACM compara o desejado (Git) com o que está rodando e corrige |
 
-Ligar um módulo = descomentar a linha. Desligar = comentar. Mudar um valor = editar o patch.
-Um push aplica tudo, no hub e dentro do cluster.
+Ligar um módulo = descomentar a linha. Desligar = comentar. Mudar um valor = editar o `params.yaml`.
+Atualizar um módulo = trocar o `?ref=`. Um push aplica tudo, no hub e dentro do cluster.
 
 ## Manuais
 
 - [docs/MANUAL-CRIACAO.md](docs/MANUAL-CRIACAO.md): criar, configurar o day-2, mudar e destruir clusters
 - [docs/LEITURA-POLICIES.md](docs/LEITURA-POLICIES.md): ler as policies por cluster, dependências e troubleshooting
+- [hcp-modules-policies → README](https://github.com/marcruz1997/hcp-modules-policies): catálogo, parâmetros de cada módulo e versionamento
 
 ## Fluxo
 
 ```
 git push clusters/<nome>/
    └─ Argo (ApplicationSet pg-clusters) renderiza a pasta com o PolicyGenerator
+        │   (baixa os módulos do hcp-modules-policies na versão do ?ref=)
         └─ Policy pg-provisioning/hcp-<nome>  ->  Placement: local-cluster
              └─ ACM cria HostedCluster, NodePool(s), ManagedCluster, KAC, secrets...
                   └─ HyperShift sobe o cluster  ->  ACM importa (modo Hosted)
-                       └─ labels feature.pg.lab/*  ->  policies de day-2 (pg-policies-features)
+                       └─ labels feature.pg.lab/*  ->  policies de day-2 (pg-policies-features,
+                                                       publicadas do hcp-modules-policies/policies)
 ```
 
-## Estrutura: declaração separada da parte verbosa
+## Estrutura
 
 ```
 clusters/<nome>/                 # <- O QUE VOCÊ EDITA
-  cluster/kustomization.yaml     # a declaração do cluster (o que ele tem + o que muda)
+  cluster/kustomization.yaml     # quais módulos (URL + ?ref=)
+  cluster/params.yaml            # valores do cluster
   policy.yaml                    # fixo (só o nome em 2 linhas)
   kustomization.yaml             # fixo
-provisioning/                    # <- PARTE VERBOSA (raramente mexe)
-  base/                          # HostedCluster, NodePool, ManagedCluster, KAC, ssh
-    params-defaults.yaml         # DEFAULTS de todos os clusters (versão, rede, ssh, admin...)
-  workers/{demo..xlarge}         # tamanho dos workers
-  infra/{demo..xlarge}           # nós de infra JÁ no tamanho (inclui o NodePool)
-  features/                      # oauth-htpasswd, ntp, etcd-backup, ingress, registry,
-                                 # observability, loki, logging
-  apply-params/                  # transformer final: aplica os parâmetros em tudo
-policies/hub/  policies/features/   # policies do hub e de day-2
-hub/  bootstrap/  docs/cluster-template/  scripts/
+docs/cluster-template/           # modelo de cluster novo (usado pelo scripts/new-cluster.sh)
+policies/hub/                    # policies do hub (pull-secret, endpoint S3 do Loki)
+hub/  bootstrap/  scripts/
 ```
 
 ## Criar um cluster
 
+O mínimo (o resto já vem com valores que funcionam):
+
 ```bash
-scripts/new-cluster.sh app01
-# edite clusters/app01/cluster/kustomization.yaml
-git add clusters/app01 && git commit -m "app01" && git push
+scripts/new-cluster.sh app01          # preenche nome, chave SSH (~/.ssh/*.pub) e pede a senha do admin
+git add clusters/app01 && git commit -m "cria cluster app01" && git push
 ```
 
-A declaração inteira de um cluster:
+Isso cria um cluster com os módulos padrão: workers `small` (2 nós), login htpasswd, NTP, backup do
+etcd e router. Para mudar algo, os dois arquivos vêm comentados linha a linha (o que preencher,
+formato, o que é imutável e o que recria nós):
+
+`clusters/app01/cluster/kustomization.yaml` (exemplo com mais módulos ligados):
 
 ```yaml
-# clusters/app01/cluster/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources: [../../../provisioning/base]
-components:                                   # a ORDEM NÃO IMPORTA
-  - ../../../provisioning/workers/medium
-  - ../../../provisioning/infra/small
-  - ../../../provisioning/features/oauth-htpasswd
-  - ../../../provisioning/features/ntp
-  - ../../../provisioning/features/ingress
-  - ../../../provisioning/features/observability
-patches:
-  - target: {kind: ClusterParams}
-    patch: |-
-      kind: ClusterParams
-      metadata: {name: params}
-      spec:
-        name: app01                           # obrigatório
-        workerReplicas: 3                     # só o que for diferente do padrão
-        ingress: {replicas: "3"}
-transformers: [../../../provisioning/apply-params]
+resources:
+  - https://github.com/marcruz1997/hcp-modules-policies//base?ref=v1.0.0
+  - params.yaml
+components:
+  - https://github.com/marcruz1997/hcp-modules-policies//workers/medium?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//infra/small?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//features/oauth-htpasswd?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//features/oauth-entraid?ref=v1.0.0   # liga Entra ID
+  - https://github.com/marcruz1997/hcp-modules-policies//features/ntp?ref=v1.0.0
+  - https://github.com/marcruz1997/hcp-modules-policies//features/ingress?ref=v1.0.0
+  # - https://github.com/marcruz1997/hcp-modules-policies//features/logging?ref=v1.0.0      # desligado
+transformers:
+  - https://github.com/marcruz1997/hcp-modules-policies//apply-params?ref=v1.0.0
 ```
 
-Tudo que não estiver no patch vem de `provisioning/base/params-defaults.yaml`
-(versão, redes, chave SSH, usuário/senha admin, retenções...). Para mudar o padrão de
-**todos** os clusters, edite esse arquivo.
+`clusters/app01/cluster/params.yaml` (trecho):
+
+```yaml
+spec:
+  name: app01
+  workerReplicas: 3              # número, sem aspas
+  infraReplicas: 3
+  oauth: {adminUser: "admin", htpasswd: "admin:$2y$05$..."}
+  entraid: {tenantId: "...", clientId: "...", adminGroup: "..."}
+  ingress: {replicas: "3"}       # vira label: entre aspas
+```
+
+Regras: `base` e `apply-params` são obrigatórios; `infra/<size>` antes de `features/ntp`; só as
+seções do `params.yaml` dos módulos ligados são lidas.
 
 Acompanhar:
 ```bash
@@ -105,45 +114,22 @@ oc -n local-cluster get policy pg-provisioning.hcp-app01 \
 Logo após criar é normal ficar NonCompliant alguns minutos (o namespace do
 KlusterletAddonConfig só existe depois que o ACM registra o cluster).
 
-## O cardápio
+## Módulos disponíveis (v1.0.0)
 
-| Linha em `components` | O que faz | Parâmetro (no patch, opcional) |
-|---|---|---|
-| `workers/<size>` | Tamanho dos workers | `workerReplicas` |
-| `infra/<size>` | NodePool de infra (label + taint) já no tamanho | `infraReplicas` |
-| `features/oauth-htpasswd` | Login htpasswd + cluster-admin | `oauth.adminUser`, `oauth.htpasswd` |
-| `features/oauth-entraid` | Login Microsoft Entra ID + cluster-admin para um grupo (soma com o htpasswd) | `entraid.*` + Secret no hub ([manual 3.1.2](docs/MANUAL-CRIACAO.md)) |
-| `features/ntp` | chrony em todos os nós (**recria os nós** se ligado depois) | servidores em `features/ntp/` |
-| `features/etcd-backup` | CronJob no hub com snapshot diário do etcd | horário em `features/etcd-backup/` |
-| `features/ingress` | Router nos nós de infra | `ingress.replicas` (entre aspas) |
-| `features/registry` | Image registry com PVC | - |
-| `features/observability` | Monitoring persistente + UWM + COO | `observability.*` |
-| `features/loki` | Loki + bucket S3 no hub | `loki.*` |
-| `features/logging` | Logging -> Loki (**já inclui o loki**) | `loki.*` |
+`workers/<size>`, `infra/<size>`, `features/oauth-htpasswd`, `features/oauth-entraid`, `features/proxy`, `features/ntp`,
+`features/etcd-backup`, `features/ingress`, `features/registry`, `features/observability`,
+`features/loki`, `features/logging`. O que cada um faz e quais parâmetros pede:
+[catálogo no hcp-modules-policies](https://github.com/marcruz1997/hcp-modules-policies#catálogo).
 
-Tamanhos (por nó; edite em `provisioning/workers/` e `provisioning/infra/`, que são independentes):
+## Versões dos módulos
 
-| size | cores | memória | disco |
-|---|---|---|---|
-| demo | 2 | 8Gi | 120Gi |
-| small | 4 | 16Gi | 120Gi |
-| medium | 8 | 32Gi | 120Gi |
-| large | 16 | 64Gi | 120Gi |
-| xlarge | 32 | 128Gi | 120Gi |
-
-**Aspas no patch:** réplicas de NodePool (`workerReplicas`, `infraReplicas`) são números; o
-resto que vira label (`ingress.replicas`, `loki.retentionDays`) vai **entre aspas**.
-
-### Criar um component novo
-1. Pasta em `provisioning/features/<nome>/` com `kind: Component` (recursos e patches).
-2. Recursos que precisam do nome do cluster usam `CLUSTER` + um label `pg.lab/role=<x>`.
-3. Adicione o replacement em `provisioning/apply-params/replacements.yaml` selecionando
-   pelo label (assim, se a feature não estiver ligada, o alvo é simplesmente ignorado).
-4. Label `feature.pg.lab/<nome>: "false"` em `provisioning/base/managedcluster.yaml` e o component
-   troca para `"true"` com `op: add` (é isso que faz "tirar da lista" desligar a feature).
-5. Parâmetros novos com valor padrão em `provisioning/base/params-defaults.yaml`.
-6. Component **acrescenta**, não substitui: listas com `/-` (como os `oauth-*` em
-   `identityProviders`). Segredo nunca no Git.
+- Cada linha do cluster aponta para uma tag do hcp-modules-policies (`?ref=v1.0.0`). Uma tag nova **não muda
+  nenhum cluster** até alguém trocar o `?ref=` dele.
+- Para atualizar: leia o `CHANGELOG.md` do hcp-modules-policies, troque o `?ref=` no cluster (PR) e acompanhe a
+  policy `hcp-<nome>`.
+- No mesmo cluster, misture só versões da **mesma versão maior** (ex.: `v1.0.0` com `v1.2.0`).
+- As policies de day-2 são publicadas uma vez para todos os clusters por
+  `bootstrap/40-policies-features.yaml` (`targetRevision`). Mantenha-a na maior versão em uso.
 
 ## Gerenciamento
 
@@ -151,7 +137,7 @@ resto que vira label (`ingress.replicas`, `loki.retentionDays`) vai **entre aspa
   HostedCluster/NodePool/ManagedCluster é revertida pelo ACM. Campos que o HyperShift completa
   (ex.: services) não brigam com a policy, porque `musthave` só exige o que está declarado.
 - **Day-2:** policies em `pg-policies-features`, selecionadas pelos labels `feature.pg.lab/*`.
-- Ligar uma feature depois: adicione o component, push. Desligar: remova o component; o label
+- Ligar uma feature depois: descomente o módulo, push. Desligar: comente; o label
   `feature.pg.lab/<feature>` volta a `"false"`, a policy de day-2 sai do cluster, mas **não apaga**
   o que criou (`pruneObjectBehavior: None`).
 
@@ -174,12 +160,12 @@ oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-foun
 
 ## Bootstrap
 
-1. Troque a URL do repo se o nome for outro:
-   ```bash
-   grep -rl hcp-lab-day-two-policies bootstrap | xargs sed -i '' 's#marcruz1997/hcp-lab-day-two-policies#SEU_ORG/SEU_REPO#'
-   ```
-2. Pré-requisitos no hub (iguais ao outro repo): OpenShift GitOps com o plugin do PolicyGenerator,
-   ACM/MCE com HyperShift, OpenShift Virtualization, MetalLB (APIServer LoadBalancer).
+1. O bootstrap aponta para `marcruz1997/hcp-lab-day-two-policies` (clusters, hub) e
+   `marcruz1997/hcp-modules-policies` (policies de day-2). Se mudar algum repo, troque a URL em `bootstrap/` e
+   nos `clusters/*/cluster/kustomization.yaml`.
+2. Pré-requisitos no hub: OpenShift GitOps com o plugin do PolicyGenerator, ACM/MCE com HyperShift,
+   OpenShift Virtualization, MetalLB (APIServer LoadBalancer). O repo-server do Argo baixa os módulos
+   do hcp-modules-policies no build (repo privado: cadastre a credencial em Argo → Settings → Repositories).
 3. `oc apply -f bootstrap/`
 
 **Mesmo hub do `lab-hcp-day-two`?** Os nomes deste repo são isolados (prefixo `pg-`, labels
