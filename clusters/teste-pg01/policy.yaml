@@ -1,0 +1,24 @@
+# Arquivo fixo: só o nome do cluster nas 3 linhas marcadas.
+apiVersion: policy.open-cluster-management.io/v1
+kind: PolicyGenerator
+metadata:
+  name: hcp-cluster
+placementBindingDefaults:
+  name: pb-hcp-teste-pg01                 # <- nome
+policyDefaults:
+  namespace: pg-provisioning
+  policyLabels:
+    pg.lab/cluster: teste-pg01            # <- nome (filtro por cluster no console)
+  placement:
+    placementName: pl-local-cluster   # Placement compartilhada (hub/)
+  remediationAction: enforce
+  severity: high
+  complianceType: musthave
+  pruneObjectBehavior: None           # NUNCA mude: apagaria o HostedCluster
+  categories: ["CM Configuration Management"]
+  standards: ["NIST SP 800-53"]
+  controls: ["CM-2 Baseline Configuration"]
+policies:
+  - name: hcp-teste-pg01                      # <- nome
+    manifests:
+      - path: cluster

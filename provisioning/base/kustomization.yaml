@@ -1,8 +1,10 @@
-# Base de um hosted cluster. Os placeholders (CLUSTER, RELEASE_IMAGE, ...) são
-# substituídos pelo component "apply-params" a partir do params.yaml de cada cluster.
+# Base de TODO cluster: HostedCluster, NodePool de workers, ManagedCluster, KAC, ssh secret
+# e os defaults (params-defaults.yaml). Placeholders (CLUSTER, RELEASE_IMAGE...) são
+# preenchidos pelo transformer provisioning/apply-params no final do build.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - params-defaults.yaml
   - hostedcluster.yaml
   - nodepool-worker.yaml
   - ssh-secret.yaml

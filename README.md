@@ -4,6 +4,11 @@ Versão alternativa do `lab-hcp-day-two`: aqui **o próprio cluster é criado po
 O Argo CD só leva as policies do Git para o hub; quem cria e mantém HostedCluster, NodePools e
 ManagedCluster é o ACM (`enforce` no `local-cluster`). Tudo aparece em **Governance**.
 
+## Manuais
+
+- [docs/MANUAL-CRIACAO.md](docs/MANUAL-CRIACAO.md): criar, configurar o day-2, mudar e destruir clusters
+- [docs/LEITURA-POLICIES.md](docs/LEITURA-POLICIES.md): ler as policies por cluster, dependências e troubleshooting
+
 ## Fluxo
 
 ```
@@ -15,87 +20,110 @@ git push clusters/<nome>/
                        └─ labels feature.pg.lab/*  ->  policies de day-2 (pg-policies-features)
 ```
 
-## Estrutura
+## Estrutura: declaração separada da parte verbosa
 
 ```
-bootstrap/                      # aplicar uma vez: oc apply -f bootstrap/
-hub/                            # namespaces + ManagedClusterSetBindings
-policies/hub/                   # copia o pull-secret do hub (hcp-pull-secret)
-policies/features/              # day-2: registry, ingress, loki, logging, observability, oauth-admin
-provisioning/
-  base/                         # HostedCluster, NodePool worker, ManagedCluster, KAC, ssh secret
-  components/
-    worker-size/{demo..xlarge}  # tamanho dos workers
-    infra-nodes/                # NodePool <nome>-infra (label + taint)
-    infra-size/{demo..xlarge}   # tamanho da infra
-    oauth-htpasswd/ ntp/ etcd-backup/
-    features/{ingress,registry,observability,loki,logging}
-    apply-params/               # SEMPRE o último: aplica o params.yaml
-clusters/<nome>/
-  kustomization.yaml            # chama o PolicyGenerator
-  policyGenerator.yaml          # policy hcp-<nome> no local-cluster
-  cluster/kustomization.yaml    # base + components escolhidos
-  cluster/params.yaml           # nome, versão, réplicas, ssh, parâmetros das features
-docs/cluster-template/          # modelo para novos clusters
-scripts/chrony-b64.sh           # gera o conteúdo do NTP
+clusters/<nome>/                 # <- O QUE VOCÊ EDITA
+  cluster/kustomization.yaml     # a declaração do cluster (o que ele tem + o que muda)
+  policy.yaml                    # fixo (só o nome em 2 linhas)
+  kustomization.yaml             # fixo
+provisioning/                    # <- PARTE VERBOSA (raramente mexe)
+  base/                          # HostedCluster, NodePool, ManagedCluster, KAC, ssh
+    params-defaults.yaml         # DEFAULTS de todos os clusters (versão, rede, ssh, admin...)
+  workers/{demo..xlarge}         # tamanho dos workers
+  infra/{demo..xlarge}           # nós de infra JÁ no tamanho (inclui o NodePool)
+  features/                      # oauth-htpasswd, ntp, etcd-backup, ingress, registry,
+                                 # observability, loki, logging
+  apply-params/                  # transformer final: aplica os parâmetros em tudo
+policies/hub/  policies/features/   # policies do hub e de day-2
+hub/  bootstrap/  docs/cluster-template/  scripts/
 ```
 
 ## Criar um cluster
 
 ```bash
-cp -r docs/cluster-template clusters/app01
-sed -i '' 's/NOME/app01/g' clusters/app01/policyGenerator.yaml clusters/app01/cluster/params.yaml   # macOS
-# edite clusters/app01/cluster/params.yaml (versão, ssh, réplicas, oauth...)
-# edite clusters/app01/cluster/kustomization.yaml (components: tamanhos e features)
-git add -A && git commit -m "app01" && git push
+scripts/new-cluster.sh app01
+# edite clusters/app01/cluster/kustomization.yaml
+git add clusters/app01 && git commit -m "app01" && git push
 ```
+
+A declaração inteira de um cluster:
+
+```yaml
+# clusters/app01/cluster/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../../provisioning/base]
+components:                                   # a ORDEM NÃO IMPORTA
+  - ../../../provisioning/workers/medium
+  - ../../../provisioning/infra/small
+  - ../../../provisioning/features/oauth-htpasswd
+  - ../../../provisioning/features/ntp
+  - ../../../provisioning/features/ingress
+  - ../../../provisioning/features/observability
+patches:
+  - target: {kind: ClusterParams}
+    patch: |-
+      kind: ClusterParams
+      metadata: {name: params}
+      spec:
+        name: app01                           # obrigatório
+        workerReplicas: 3                     # só o que for diferente do padrão
+        ingress: {replicas: "3"}
+transformers: [../../../provisioning/apply-params]
+```
+
+Tudo que não estiver no patch vem de `provisioning/base/params-defaults.yaml`
+(versão, redes, chave SSH, usuário/senha admin, retenções...). Para mudar o padrão de
+**todos** os clusters, edite esse arquivo.
 
 Acompanhar:
 ```bash
 oc -n pg-provisioning get policy hcp-app01           # Compliant = tudo criado
 oc -n clusters get hostedcluster,nodepool
 oc get managedcluster app01 --show-labels
-oc -n pg-policies-features get policies
 ```
-
-Se a policy de provisionamento ficar `NonCompliant`, a mensagem explica o motivo:
+Motivo de NonCompliant:
 ```bash
-oc -n local-cluster get policy pg-provisioning.hcp-app01 -o jsonpath='{.status.details[*].history[0].message}{"\n"}'
+oc -n local-cluster get policy pg-provisioning.hcp-app01 \
+  -o jsonpath='{.status.details[*].history[0].message}{"\n"}'
 ```
-Logo após a criação é normal ela ficar NonCompliant por alguns minutos (ex.: o namespace do
-KlusterletAddonConfig ainda não existe). O ACM tenta de novo sozinho.
+Logo após criar é normal ficar NonCompliant alguns minutos (o namespace do
+KlusterletAddonConfig só existe depois que o ACM registra o cluster).
 
-## Components (o "cardápio")
+## O cardápio
 
-| Component | O que faz | Precisa no params.yaml |
+| Linha em `components` | O que faz | Parâmetro (no patch, opcional) |
 |---|---|---|
-| `worker-size/<size>` | Tamanho dos workers | `workerReplicas` |
-| `infra-nodes` + `infra-size/<size>` | NodePool de infra com label e taint | `infraReplicas` |
-| `oauth-htpasswd` | IdP htpasswd + `adminUser` com cluster-admin | `oauth.adminUser`, `oauth.htpasswd` |
-| `ntp` | chrony em todos os nós (**recria os nós** se ligado depois) | servidores em `components/ntp` |
-| `etcd-backup` | CronJob no hub, snapshot diário do etcd | nada |
-| `features/ingress` | Router nos nós de infra | `ingress.replicas` |
-| `features/registry` | Image registry com PVC | nada |
+| `workers/<size>` | Tamanho dos workers | `workerReplicas` |
+| `infra/<size>` | NodePool de infra (label + taint) já no tamanho | `infraReplicas` |
+| `features/oauth-htpasswd` | Login htpasswd + cluster-admin | `oauth.adminUser`, `oauth.htpasswd` |
+| `features/ntp` | chrony em todos os nós (**recria os nós** se ligado depois) | servidores em `features/ntp/` |
+| `features/etcd-backup` | CronJob no hub com snapshot diário do etcd | horário em `features/etcd-backup/` |
+| `features/ingress` | Router nos nós de infra | `ingress.replicas` (entre aspas) |
+| `features/registry` | Image registry com PVC | - |
 | `features/observability` | Monitoring persistente + UWM + COO | `observability.*` |
 | `features/loki` | Loki + bucket S3 no hub | `loki.*` |
 | `features/logging` | Logging -> Loki (**já inclui o loki**) | `loki.*` |
 
-Tamanhos (por nó), iguais para worker e infra por padrão. Para mudar, edite o arquivo do size
-em `provisioning/components/worker-size/` ou `infra-size/` (são independentes):
+Tamanhos (por nó; edite em `provisioning/workers/` e `provisioning/infra/`, que são independentes):
 
 | size | cores | memória | disco |
 |---|---|---|---|
-| demo | 2 | 8Gi | 32Gi |
-| small | 4 | 16Gi | 64Gi |
-| medium | 8 | 32Gi | 100Gi |
-| large | 16 | 64Gi | 150Gi |
-| xlarge | 32 | 128Gi | 200Gi |
+| demo | 2 | 8Gi | 120Gi |
+| small | 4 | 16Gi | 120Gi |
+| medium | 8 | 32Gi | 120Gi |
+| large | 16 | 64Gi | 120Gi |
+| xlarge | 32 | 128Gi | 120Gi |
 
-**Ordem dos components:** worker-size → infra-nodes → infra-size → features/oauth/ntp/etcd-backup →
-**apply-params por último**. `ntp` depois de `infra-nodes` (senão o pool de infra fica sem NTP).
+**Aspas no patch:** réplicas de NodePool (`workerReplicas`, `infraReplicas`) são números; o
+resto que vira label (`ingress.replicas`, `loki.retentionDays`) vai **entre aspas**.
 
-**Tipos no params.yaml:** `workerReplicas`/`infraReplicas` são números **sem aspas**; tudo que vira
-label (`ingress.replicas`, `observability.*`, `loki.*`, `oauth.adminUser`) **entre aspas**.
+### Criar um component novo
+1. Pasta em `provisioning/features/<nome>/` com `kind: Component` (recursos e patches).
+2. Recursos que precisam do nome do cluster usam `CLUSTER` + um label `pg.lab/role=<x>`.
+3. Adicione o replacement em `provisioning/apply-params/replacements.yaml` selecionando
+   pelo label (assim, se a feature não estiver ligada, o alvo é simplesmente ignorado).
 
 ## Gerenciamento
 

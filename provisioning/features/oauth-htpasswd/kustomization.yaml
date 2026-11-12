@@ -1,0 +1,33 @@
+# Login htpasswd + cluster-admin para oauth.adminUser.
+#  - IdP no HostedCluster + Secret htpasswd-<nome> (em HCP o OAuth roda no hub)
+#  - cluster-admin: policy feature-oauth-htpasswd (day-2), via labels
+# Parâmetros: oauth.adminUser, oauth.htpasswd
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - htpasswd-secret.yaml
+patches:
+  - target: {kind: HostedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/pg.lab~1oauth
+        value: "true"
+      - op: add
+        path: /spec/configuration
+        value:
+          oauth:
+            identityProviders:
+              - name: htpasswd
+                type: HTPasswd
+                mappingMethod: claim
+                htpasswd:
+                  fileData:
+                    name: htpasswd-CLUSTER
+  - target: {kind: ManagedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/feature.pg.lab~1oauth-htpasswd
+        value: "true"
+      - op: add
+        path: /metadata/labels/config.pg.lab~1oauth-admin
+        value: "PLACEHOLDER"

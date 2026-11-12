@@ -1,26 +1,41 @@
-# O que este cluster tem. Cada linha de "components" liga um tamanho ou uma feature.
-# ORDEM IMPORTA:
-#   1. worker-size   2. infra-nodes + infra-size   3. features e oauth/ntp/etcd-backup
-#   4. apply-params SEMPRE POR ÚLTIMO
+# ================= CLUSTER NOME =================
+# Escolha o que o cluster tem (a ordem não importa) e sobrescreva só o que
+# for diferente dos defaults (provisioning/base/params-defaults.yaml).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources:
-  - ../../../provisioning/base
-  - params.yaml
+resources: [../../../provisioning/base]
 components:
-  # --- workers: demo | small | medium | large | xlarge ---
-  - ../../../provisioning/components/worker-size/small
-  # --- nós de infra (remova as 2 linhas para não ter) ---
-  - ../../../provisioning/components/infra-nodes
-  - ../../../provisioning/components/infra-size/demo
-  # --- features (comente/descomente) ---
-  - ../../../provisioning/components/oauth-htpasswd
-  - ../../../provisioning/components/ntp
-  - ../../../provisioning/components/etcd-backup
-  - ../../../provisioning/components/features/ingress
-  # - ../../../provisioning/components/features/registry
-  # - ../../../provisioning/components/features/observability
-  # - ../../../provisioning/components/features/logging     # já inclui o loki
-  # - ../../../provisioning/components/features/loki        # só loki, sem logging
-  # --- sempre por último ---
-  - ../../../provisioning/components/apply-params
+  # --- tamanho dos workers (padrão: small) ---
+  - ../../../provisioning/workers/small              # demo|small|medium|large|xlarge
+  # --- nós de infra (opcional) ---
+  # - ../../../provisioning/infra/small              # demo|small|medium|large|xlarge
+  # --- features (descomente o que quiser) ---
+  # - ../../../provisioning/features/oauth-htpasswd
+  # - ../../../provisioning/features/ntp
+  # - ../../../provisioning/features/etcd-backup
+  # - ../../../provisioning/features/ingress
+  # - ../../../provisioning/features/registry
+  # - ../../../provisioning/features/observability
+  # - ../../../provisioning/features/logging        # já inclui o loki
+  # - ../../../provisioning/features/loki
+patches:
+  - target: {kind: ClusterParams}
+    patch: |-
+      kind: ClusterParams
+      metadata: {name: params}
+      spec:
+        name: NOME
+        # --- descomente só o que for diferente do padrão ---
+        # env: prd
+        # releaseImage: quay.io/openshift-release-dev/ocp-release:4.18.60-multi
+        # workerReplicas: 3
+        # infraReplicas: 3
+        # clusterNetwork: 10.132.0.0/14
+        # serviceNetwork: 172.31.0.0/16
+        # oauth:
+        #   htpasswd: |
+        #     admin:$2y$05$...
+        # ingress: {replicas: "3"}
+        # observability: {prometheusRetention: 15d, prometheusStorage: 50Gi}
+        # loki: {size: 1x.small, retentionDays: "15"}
+transformers: [../../../provisioning/apply-params]

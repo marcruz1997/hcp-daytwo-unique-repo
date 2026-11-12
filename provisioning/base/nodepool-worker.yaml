@@ -1,4 +1,4 @@
-# NodePool de workers. Tamanho: component worker-size/<size>.
+# NodePool de workers. Tamanho: component workers/<size> (padrão abaixo = small).
 # O label pg.lab/pool é só para os components acharem este pool.
 apiVersion: hypershift.openshift.io/v1beta1
 kind: NodePool
@@ -11,10 +11,12 @@ spec:
   clusterName: CLUSTER
   arch: amd64
   replicas: 2
-  # Onde rodam router/registry/monitoring/loki. O component infra-nodes remove daqui
+  # Onde rodam router/registry/monitoring/loki. O component infra/<size> remove daqui
   # e coloca no pool de infra.
   nodeLabels:
     hcp.lab/infra-workloads: "true"
+  # MachineConfigs (ex.: NTP). Preenchido pelo component features/ntp.
+  config: []
   management:
     autoRepair: false
     upgradeType: Replace
@@ -30,4 +32,4 @@ spec:
       rootVolume:
         type: Persistent
         persistent:
-          size: 64Gi
+          size: 120Gi

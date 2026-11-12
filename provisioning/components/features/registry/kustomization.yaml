@@ -1,9 +1,0 @@
-# Day-2: image registry interno (policy feature-registry). Só coloca o label.
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Component
-patches:
-  - target: {kind: ManagedCluster}
-    patch: |-
-      - op: add
-        path: /metadata/labels/feature.pg.lab~1registry
-        value: "true"

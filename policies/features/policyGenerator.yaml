@@ -1,5 +1,5 @@
 # Day-2 por feature. Cada policy vai SÓ para os clusters com o label feature.pg.lab/<feature>=true,
-# que os components provisioning/components/features/* colocam no ManagedCluster.
+# que os components provisioning/features/* colocam no ManagedCluster.
 # Parâmetros (réplicas, tamanhos, retenção) chegam pelos labels config.pg.lab/* via hub templates.
 #
 # Features que NÃO aparecem aqui porque vivem no hub (policy de provisionamento do cluster):
@@ -103,3 +103,15 @@ policies:
           - {key: feature.pg.lab/observability, operator: In, values: ["true"]}
     manifests:
       - path: manifests/logging-ui
+
+  # ---------------- VERIFICAÇÕES (inform: só mostram, não alteram) ----------------
+  # Confere DE DENTRO do cluster filho o que o provisionamento (hcp-<nome>, no hub) entregou.
+  - name: verify-infra-nodes
+    remediationAction: inform
+    placement:
+      name: pl-verify-infra-nodes
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/infra-nodes, operator: In, values: ["true"]}
+    manifests:
+      - path: manifests/verify-infra-nodes

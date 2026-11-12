@@ -3,6 +3,8 @@ kind: HostedCluster
 metadata:
   name: CLUSTER
   namespace: clusters
+  labels:
+    pg.lab/role: hostedcluster
 spec:
   infraID: CLUSTER
   release:
