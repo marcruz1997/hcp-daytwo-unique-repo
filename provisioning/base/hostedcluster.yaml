@@ -27,6 +27,8 @@ spec:
     serviceNetwork:
       - cidr: SERVICE_NETWORK
     networkType: OVNKubernetes
+  # Cada feature acrescenta só a sua parte (oauth, proxy...), em qualquer ordem.
+  configuration: {}
   controllerAvailabilityPolicy: HighlyAvailable
   infrastructureAvailabilityPolicy: HighlyAvailable
   platform:

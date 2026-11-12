@@ -1,0 +1,10 @@
+# CA do proxy, no namespace dos HostedClusters (o HyperShift lê a chave ca-bundle.crt).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: CLUSTER-proxy-ca
+  namespace: clusters
+  labels:
+    pg.lab/role: proxy-ca
+data:
+  ca-bundle.crt: PROXY_CA

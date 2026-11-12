@@ -66,6 +66,8 @@ Uma linha por item. **A ordem não importa.**
 | `features/observability` | Prometheus/Alertmanager persistentes + user workload + COO |
 | `features/logging` | Logging (app, infra, audit) → Loki. **Já inclui o loki** (tamanho: `loki.size`, ver 3.1.1) |
 | `features/loki` | Só o Loki (use apenas sem `logging`; tamanho: `loki.size`) |
+| `features/proxy` | Proxy de saída do cluster (control plane e nós) |
+| `features/proxy-ca` | Proxy + CA própria do proxy (inspeção TLS). **Já inclui o proxy** |
 
 Tamanhos (`demo` só para lab):
 
@@ -129,6 +131,15 @@ patches:
           htpasswd: |
             admin:$2y$05$...
             dev1:$2y$05$...
+        # --- proxy (features/proxy ou features/proxy-ca) ---
+        proxy:
+          httpProxy: http://proxy.empresa.local:3128
+          httpsProxy: http://proxy.empresa.local:3128
+          noProxy: .empresa.local,10.0.0.0/8
+          trustedCA: |                                # só com features/proxy-ca
+            -----BEGIN CERTIFICATE-----
+            ...
+            -----END CERTIFICATE-----
         # --- day-2 (valores ENTRE aspas) ---
         ingress: {replicas: "3"}
         observability:
@@ -157,6 +168,10 @@ patches:
 | `sshPublicKey` | chave da base | texto | Sim (pode **recriar os nós**) | Secret `sshkey-cluster-<nome>` |
 | `oauth.adminUser` | `admin` | texto, entre aspas | Sim | cluster-admin (`features/oauth-htpasswd`) |
 | `oauth.htpasswd` | hash da base | linhas `usuario:hash` | Sim (sem impacto nos nós) | IdP htpasswd |
+| `proxy.httpProxy` | vazio | URL | Sim (reinicia componentes, pode **recriar os nós**) | `features/proxy` |
+| `proxy.httpsProxy` | vazio | URL | Sim (idem) | `features/proxy` |
+| `proxy.noProxy` | vazio | lista separada por vírgula | Sim (idem) | `features/proxy` (ver 3.2.5) |
+| `proxy.trustedCA` | vazio | certificado PEM | Sim (idem) | `features/proxy-ca` |
 | `ingress.replicas` | `"2"` | **entre aspas** | Sim | routers (`features/ingress`) |
 | `observability.prometheusRetention` | `7d` | entre aspas | Sim | Prometheus |
 | `observability.prometheusStorage` | `20Gi` | entre aspas | Só **aumentar** (PVC) | PVC do Prometheus |
@@ -213,6 +228,31 @@ Use uma versão suportada pelo MCE/HyperShift do hub. Mudar `releaseImage` num c
   (`htpasswd -nbB <usuario> '<senha>'`). Só o `oauth.adminUser` recebe cluster-admin; os outros
   entram sem permissões (dê RBAC a eles como quiser). Recomendado: **uma senha por cluster**.
 - **kubeconfig de admin** (sempre existe): `oc -n clusters extract secret/<nome>-admin-kubeconfig --to=-`.
+
+#### 3.2.5 Proxy
+
+```yaml
+components:
+  - ../../../provisioning/features/proxy        # ou features/proxy-ca (com CA própria)
+...
+      spec:
+        name: app01
+        proxy:
+          httpProxy: http://proxy.empresa.local:3128
+          httpsProxy: http://proxy.empresa.local:3128
+          noProxy: .empresa.local,10.0.0.0/8
+```
+
+- Vai em `HostedCluster.spec.configuration.proxy`: o HyperShift aplica no **control plane e nos
+  nós**. Nada é configurado dentro do cluster.
+- `noProxy`: o que **não** passa pelo proxy. O OpenShift já acrescenta as redes do próprio
+  cluster; inclua a rede do hub/nós, domínios internos e o domínio `apps` do hub (endpoint S3 do
+  Loki) se o proxy não alcançá-lo.
+- Proxy que inspeciona TLS: use `features/proxy-ca` e cole a CA em `proxy.trustedCA` (PEM). Ela
+  vira o ConfigMap `<nome>-proxy-ca` no hub.
+- Para todos os clusters: preencha `proxy.*` em `params-defaults.yaml` e liste o component em
+  cada cluster.
+- Ligar ou mudar num cluster existente **reinicia componentes e pode recriar os nós**.
 
 **Regras rápidas**
 - `workerReplicas` / `infraReplicas`: números **sem** aspas.
@@ -275,6 +315,7 @@ Edite `clusters/app01/cluster/kustomization.yaml` e faça push. O ACM aplica soz
 | Trocar `workers/<size>` ou `infra/<size>` | **Recria os nós** do pool (um por vez) |
 | Mudar `workerReplicas` / `infraReplicas` | Adiciona/remove nós |
 | Ligar ou mudar `ntp` | **Recria todos os nós** |
+| Ligar ou mudar `proxy` | Reinicia componentes e pode **recriar os nós** |
 | Trocar senha (`oauth.htpasswd`) | OAuth recarrega, nós intactos |
 | Mudar `releaseImage` | **Upgrade** do cluster (control plane, depois workers) |
 | Tirar uma feature da lista | A policy para de gerenciar, mas **não apaga** o que já criou |
@@ -337,7 +378,6 @@ Mudanças aqui afetam **todos** os clusters que usam o item, no próximo sync.
 | Rede secundária / VLAN para os nós | nós só na rede padrão de pods do hub | component `network/<nome>` com NetworkAttachmentDefinition + `additionalNetworks` no NodePool |
 | Segundo pool de workers (GPU, AAP...) | um pool de workers + infra opcional | component `workers-extra/<nome>` |
 | Autoscaling de nós | réplicas fixas | campo `autoScaling` no NodePool via component |
-| Proxy de saída | não configurado | `spec.configuration.proxy` no HostedCluster via component |
 | Certificado próprio no ingress | certificado padrão | Secret + `defaultCertificate` na policy de ingress |
 | Tipo de rede | fixo `OVNKubernetes` | não recomendado mudar |
 

@@ -187,3 +187,34 @@ replacements:
       - select: {kind: ObjectBucketClaim, labelSelector: pg.lab/role=loki-bucket}
         fieldPaths:
           - "spec.storageClassName"
+  # ---------------- proxy (features/proxy e features/proxy-ca) ----------------
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.proxy.httpProxy}
+    targets:
+      - select: {kind: HostedCluster, labelSelector: pg.lab/proxy=true}
+        fieldPaths:
+          - "spec.configuration.proxy.httpProxy"
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.proxy.httpsProxy}
+    targets:
+      - select: {kind: HostedCluster, labelSelector: pg.lab/proxy=true}
+        fieldPaths:
+          - "spec.configuration.proxy.httpsProxy"
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.proxy.noProxy}
+    targets:
+      - select: {kind: HostedCluster, labelSelector: pg.lab/proxy=true}
+        fieldPaths:
+          - "spec.configuration.proxy.noProxy"
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.name}
+    targets:
+      - select: {kind: HostedCluster, labelSelector: pg.lab/proxy-ca=true}
+        fieldPaths:
+          - "spec.configuration.proxy.trustedCA.name"
+        options: {delimiter: "-", index: 0}
+      - select: {kind: ConfigMap, labelSelector: pg.lab/role=proxy-ca}
+        fieldPaths:
+          - "metadata.name"
+        options: {delimiter: "-", index: 0}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.proxy.trustedCA}
+    targets:
+      - select: {kind: ConfigMap, labelSelector: pg.lab/role=proxy-ca}
+        fieldPaths:
+          - "data.[ca-bundle.crt]"

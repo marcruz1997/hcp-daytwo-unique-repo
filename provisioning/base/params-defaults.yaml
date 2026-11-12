@@ -21,6 +21,15 @@ spec:
   sshPublicKey: "ssh-rsa AAAA...COLE-SUA-CHAVE-PUBLICA..."
 
   # ---- parâmetros das features (só usados se a feature estiver na lista) ----
+  proxy:                               # features/proxy e features/proxy-ca
+    httpProxy: ""                      # ex.: http://proxy.empresa.local:3128
+    httpsProxy: ""                     # ex.: http://proxy.empresa.local:3128
+    # Domínios/redes que NÃO passam pelo proxy (separados por vírgula). O OpenShift já
+    # acrescenta sozinho as redes do próprio cluster. Inclua a rede do hub e o domínio
+    # apps do hub (endpoint S3 do Loki), se o proxy não alcançar.
+    noProxy: ""
+    # Só com features/proxy-ca: CA do proxy (quando ele inspeciona TLS), em PEM.
+    trustedCA: ""
   oauth:                               # features/oauth-htpasswd
     adminUser: admin
     # htpasswd -nbB admin 'senha'   (vários usuários: uma linha cada)

@@ -18,6 +18,7 @@ components:
   # - ../../../provisioning/features/observability
   # - ../../../provisioning/features/logging        # já inclui o loki
   # - ../../../provisioning/features/loki
+  # - ../../../provisioning/features/proxy          # ou features/proxy-ca (com CA própria)
 patches:
   - target: {kind: ClusterParams}
     patch: |-
@@ -38,4 +39,8 @@ patches:
         # ingress: {replicas: "3"}
         # observability: {prometheusRetention: 15d, prometheusStorage: 50Gi}
         # loki: {size: 1x.small, retentionDays: "15"}
+        # proxy:
+        #   httpProxy: http://proxy.empresa.local:3128
+        #   httpsProxy: http://proxy.empresa.local:3128
+        #   noProxy: .empresa.local,10.0.0.0/8
 transformers: [../../../provisioning/apply-params]

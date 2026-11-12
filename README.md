@@ -105,6 +105,8 @@ KlusterletAddonConfig só existe depois que o ACM registra o cluster).
 | `features/observability` | Monitoring persistente + UWM + COO | `observability.*` |
 | `features/loki` | Loki + bucket S3 no hub | `loki.*` |
 | `features/logging` | Logging -> Loki (**já inclui o loki**) | `loki.*` |
+| `features/proxy` | Proxy de saída (control plane e nós) | `proxy.httpProxy`, `httpsProxy`, `noProxy` |
+| `features/proxy-ca` | Proxy + CA própria (**já inclui o proxy**) | `proxy.*`, `proxy.trustedCA` |
 
 Tamanhos (por nó; edite em `provisioning/workers/` e `provisioning/infra/`, que são independentes):
 

@@ -13,16 +13,15 @@ patches:
         path: /metadata/labels/pg.lab~1oauth
         value: "true"
       - op: add
-        path: /spec/configuration
+        path: /spec/configuration/oauth
         value:
-          oauth:
-            identityProviders:
-              - name: htpasswd
-                type: HTPasswd
-                mappingMethod: claim
-                htpasswd:
-                  fileData:
-                    name: htpasswd-CLUSTER
+          identityProviders:
+            - name: htpasswd
+              type: HTPasswd
+              mappingMethod: claim
+              htpasswd:
+                fileData:
+                  name: htpasswd-CLUSTER
   - target: {kind: ManagedCluster}
     patch: |-
       - op: add

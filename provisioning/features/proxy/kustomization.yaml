@@ -1,0 +1,23 @@
+# Proxy de saída do cluster (control plane E nós), via HostedCluster.spec.configuration.proxy.
+# Parâmetros: proxy.httpProxy, proxy.httpsProxy, proxy.noProxy
+# Com CA própria do proxy (inspeção TLS), use features/proxy-ca no lugar deste.
+# ATENÇÃO: ligar/mudar num cluster existente reinicia componentes e pode recriar os nós.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target: {kind: HostedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/pg.lab~1proxy
+        value: "true"
+      - op: add
+        path: /spec/configuration/proxy
+        value:
+          httpProxy: HTTP_PROXY
+          httpsProxy: HTTPS_PROXY
+          noProxy: NO_PROXY
+  - target: {kind: ManagedCluster}
+    patch: |-
+      - op: add
+        path: /metadata/labels/feature.pg.lab~1proxy
+        value: "true"
