@@ -9,6 +9,9 @@ metadata:
 spec:
   remediationAction: enforce
   severity: high
+  evaluationInterval:
+    compliant: 10m        # já instalado: reconfere o canal a cada 10 min
+    oncompliant: 30s     # ainda instalando: tenta de novo a cada 30 s
   object-templates-raw: |
     {{- $pkg := "loki-operator" }}
     {{- $ns := "openshift-operators-redhat" }}
