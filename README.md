@@ -25,7 +25,7 @@ git push clusters/<nome>/
 ```
 clusters/<nome>/                 # <- O QUE VOCÊ EDITA
   cluster/kustomization.yaml     # a declaração do cluster (o que ele tem + o que muda)
-  policy.yaml                    # fixo (só o nome em 2 linhas)
+  policy.yaml                    # fixo (o nome vem da pasta, automático)
   kustomization.yaml             # fixo
 provisioning/                    # <- PARTE VERBOSA (raramente mexe)
   base/                          # HostedCluster, NodePool, ManagedCluster, KAC, ssh

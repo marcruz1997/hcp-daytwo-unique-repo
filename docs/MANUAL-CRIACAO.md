@@ -32,12 +32,17 @@ Isso cria `clusters/app01/` a partir de `docs/cluster-template/`:
 ```
 clusters/app01/
   cluster/kustomization.yaml   <- VOCÊ EDITA SÓ ESTE
-  policy.yaml                  <- fixo (nome já preenchido)
+  policy.yaml                  <- fixo, igual em todos (o nome vem da PASTA)
   kustomization.yaml           <- fixo
 ```
 
 Sem o script (VS Code): copie `docs/cluster-template` para `clusters/app01` e troque `NOME` por
-`app01` só dentro dessa pasta (Search & Replace com "files to include" = `clusters/app01`).
+`app01` em `cluster/kustomization.yaml` (o `name:` do patch).
+
+> **O nome da pasta TEM que ser igual ao `name:` do patch.** O nome da policy (`hcp-<pasta>`),
+> do binding e o label `pg.lab/cluster` vêm da pasta, preenchidos pelo ApplicationSet; o nome
+> do HostedCluster/ManagedCluster vem do `name:`. Se forem diferentes, a policy fica com um nome
+> e o cluster com outro.
 
 ---
 
@@ -96,6 +101,9 @@ spec:
 
 ### 3.2 `patches`: só o que muda em relação ao padrão
 
+Tudo que **não** estiver no patch vem de `provisioning/base/params-defaults.yaml`.
+Exemplo com **todos** os campos possíveis:
+
 ```yaml
 patches:
   - target: {kind: ClusterParams}
@@ -103,24 +111,112 @@ patches:
       kind: ClusterParams
       metadata: {name: params}
       spec:
-        name: app01                       # OBRIGATÓRIO
+        # --- identidade ---
+        name: app01                                   # OBRIGATÓRIO
         env: prd
+        # --- versão ---
         releaseImage: quay.io/openshift-release-dev/ocp-release:4.18.60-multi
-        workerReplicas: 3                 # número, SEM aspas
-        infraReplicas: 3                  # número, SEM aspas
+        # --- rede ---
+        clusterNetwork: 10.140.0.0/14
+        serviceNetwork: 172.32.0.0/16
+        # --- nós (números, SEM aspas) ---
+        workerReplicas: 3
+        infraReplicas: 3
+        # --- acesso ---
+        sshPublicKey: "ssh-rsa AAAA... app01"
         oauth:
-          htpasswd: |                     # htpasswd -nbB admin 'senha-forte'
+          adminUser: "admin"
+          htpasswd: |
             admin:$2y$05$...
-        ingress: {replicas: "3"}          # ENTRE aspas
-        observability: {prometheusRetention: "15d", prometheusStorage: "100Gi"}
-        loki: {size: "1x.small", retentionDays: "15"}
+            dev1:$2y$05$...
+        # --- day-2 (valores ENTRE aspas) ---
+        ingress: {replicas: "3"}
+        observability:
+          prometheusRetention: "15d"
+          prometheusStorage: "100Gi"
+          alertmanagerStorage: "5Gi"
+          uwmRetention: "7d"
+          uwmStorage: "50Gi"
+        loki:
+          size: "1x.small"
+          retentionDays: "15"
+          bucketStorageClass: "openshift-storage.noobaa.io"
 ```
 
-Todos os campos possíveis e seus padrões: `provisioning/base/params-defaults.yaml`.
+#### 3.2.1 Referência completa dos parâmetros
+
+| Campo | Padrão | Formato | Muda depois de criado? | Usado por |
+|---|---|---|---|---|
+| `name` | (obrigatório) | minúsculas, números, `-` | **Não** (é a identidade do cluster) | tudo |
+| `env` | `dev` | texto | Sim (só label) | label `env` no ManagedCluster |
+| `releaseImage` | `...ocp-release:4.18.60-multi` | imagem | Sim = **upgrade** | HostedCluster e NodePools |
+| `clusterNetwork` | `10.132.0.0/14` | CIDR | **Não** (imutável) | rede de pods (seção 3.2.2) |
+| `serviceNetwork` | `172.31.0.0/16` | CIDR | **Não** (imutável) | rede de services (seção 3.2.2) |
+| `workerReplicas` | `2` | número, **sem aspas** | Sim (adiciona/remove nós) | NodePool de workers |
+| `infraReplicas` | `3` | número, **sem aspas** | Sim | NodePool de infra (`infra/<size>`) |
+| `sshPublicKey` | chave da base | texto | Sim (pode **recriar os nós**) | Secret `sshkey-cluster-<nome>` |
+| `oauth.adminUser` | `admin` | texto, entre aspas | Sim | cluster-admin (`features/oauth-htpasswd`) |
+| `oauth.htpasswd` | hash da base | linhas `usuario:hash` | Sim (sem impacto nos nós) | IdP htpasswd |
+| `ingress.replicas` | `"2"` | **entre aspas** | Sim | routers (`features/ingress`) |
+| `observability.prometheusRetention` | `7d` | entre aspas | Sim | Prometheus |
+| `observability.prometheusStorage` | `20Gi` | entre aspas | Só **aumentar** (PVC) | PVC do Prometheus |
+| `observability.alertmanagerStorage` | `5Gi` | entre aspas | Só aumentar | PVC do Alertmanager |
+| `observability.uwmRetention` | `7d` | entre aspas | Sim | Prometheus de user workload |
+| `observability.uwmStorage` | `20Gi` | entre aspas | Só aumentar | PVC do user workload |
+| `loki.size` | `1x.demo` | entre aspas | Sim (recria pods do Loki) | LokiStack (seção 3.1.1) |
+| `loki.retentionDays` | `"7"` | número **entre aspas** | Sim | retenção dos logs |
+| `loki.bucketStorageClass` | `openshift-storage.noobaa.io` | StorageClass do hub | Só antes de criar o bucket | ObjectBucketClaim |
+
+> Por que aspas em uns e não em outros? Réplicas de NodePool vão direto num campo numérico.
+> Os demais viram **labels** do ManagedCluster (lidos pelas policies), e label é sempre texto.
+
+#### 3.2.2 Rede de cada cluster
+
+```yaml
+      spec:
+        name: app01
+        clusterNetwork: 10.140.0.0/14   # pods
+        serviceNetwork: 172.32.0.0/16   # services
+```
+
+| Regra | Por quê |
+|---|---|
+| **Não pode sobrepor as redes do hub** (pods, services, máquinas) | os nós do cluster são VMs dentro do hub |
+| **Pode repetir entre clusters filhos** | cada hosted cluster tem a rede encapsulada e isolada |
+| **Não muda depois de criado** | campos imutáveis: a policy fica NonCompliant com `... is immutable` |
+| Pods: `/14` recomendado; services: no mínimo `/23` | espaço para nós e services |
+
+Redes do hub (para não sobrepor):
+```bash
+oc get network.config cluster -o jsonpath='pods: {.spec.clusterNetwork[*].cidr}{"\n"}services: {.spec.serviceNetwork[*]}{"\n"}'
+oc get nodes -o jsonpath='{range .items[*]}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+```
+Padrão do OpenShift no hub: pods `10.128.0.0/14`, services `172.30.0.0/16` (por isso os padrões
+do repo são `10.132.0.0/14` e `172.31.0.0/16`).
+
+O tipo de rede é fixo em `OVNKubernetes` e os nós usam a rede padrão de pods do hub
+(`attachDefaultNetwork: true`). Redes secundárias/VLAN para os nós: ver seção 9.
+
+#### 3.2.3 Versão
+
+```bash
+oc get clusterimagesets          # versões conhecidas pelo hub
+```
+Use uma versão suportada pelo MCE/HyperShift do hub. Mudar `releaseImage` num cluster existente é
+**upgrade**: primeiro o control plane, depois os nós são substituídos um a um.
+
+#### 3.2.4 Acesso
+
+- **SSH**: chave **pública**. Padrão para todos em `params-defaults.yaml`; por cluster com
+  `sshPublicKey`. Acesso: `ssh -i ~/.ssh/<chave> core@<ip-do-nó>`.
+- **Login**: com `features/oauth-htpasswd`, cada linha de `oauth.htpasswd` é um usuário
+  (`htpasswd -nbB <usuario> '<senha>'`). Só o `oauth.adminUser` recebe cluster-admin; os outros
+  entram sem permissões (dê RBAC a eles como quiser). Recomendado: **uma senha por cluster**.
+- **kubeconfig de admin** (sempre existe): `oc -n clusters extract secret/<nome>-admin-kubeconfig --to=-`.
 
 **Regras rápidas**
 - `workerReplicas` / `infraReplicas`: números **sem** aspas.
-- Tudo de `ingress`, `observability`, `loki`, `oauth.adminUser`: **entre aspas** (viram labels).
+- Tudo de `ingress`, `observability`, `loki`, `oauth.adminUser`: **entre aspas**.
 - `ingress.replicas` ≤ `infraReplicas` (1 router por nó). Sem infra: ≤ `workerReplicas`.
 - Indentação dentro do `patch: |-` igual ao exemplo (é o erro de build mais comum).
 
@@ -212,11 +308,37 @@ oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-foun
 
 ## 8. Mudar padrões para todos os clusters
 
-| Quero mudar | Arquivo |
-|---|---|
-| Versão/rede/réplicas/ssh/admin padrão | `provisioning/base/params-defaults.yaml` |
-| O que é um "medium" | `provisioning/workers/medium/` ou `provisioning/infra/medium/` |
-| Servidores NTP | `provisioning/features/ntp/chrony-configmap.yaml` |
-| O que uma feature de day-2 aplica | `policies/features/manifests/<feature>/` |
+Mudanças aqui afetam **todos** os clusters que usam o item, no próximo sync.
 
-Mudanças aqui afetam **todos** os clusters que usam aquele item no próximo sync.
+| Quero mudar | Arquivo | Campo |
+|---|---|---|
+| Padrões dos parâmetros (versão, rede, réplicas, ssh, admin, retenções, Loki) | `provisioning/base/params-defaults.yaml` | `spec.*` |
+| O que é cada tamanho de worker | `provisioning/workers/<size>/kustomization.yaml` | `cores`, `memory`, disco |
+| O que é cada tamanho de infra | `provisioning/infra/<size>/kustomization.yaml` | `cores`, `memory`, disco |
+| Labels/taints dos nós de infra | `provisioning/infra/_common/nodepool-infra.yaml` | `nodeLabels`, `taints` |
+| Upgrade e reparo dos nós | `provisioning/base/nodepool-worker.yaml` e `infra/_common/nodepool-infra.yaml` | `management.upgradeType`, `autoRepair` |
+| etcd do control plane (tamanho, StorageClass) | `provisioning/base/hostedcluster.yaml` | `spec.etcd.managed.storage` |
+| Alta disponibilidade do control plane | `provisioning/base/hostedcluster.yaml` | `controllerAvailabilityPolicy`, `infrastructureAvailabilityPolicy` |
+| Como os serviços do control plane são publicados | `provisioning/base/hostedcluster.yaml` | `spec.services` |
+| Servidores NTP | `provisioning/features/ntp/chrony-configmap.yaml` | linha `source:` (`scripts/chrony-b64.sh`) |
+| Horário, retenção, tamanho do backup do etcd | `provisioning/features/etcd-backup/resources.yaml` | `schedule`, `RETENTION_DAYS`, PVC |
+| Tamanho do PVC do registry | `policies/features/manifests/registry/01-pvc.yaml` | `storage` |
+| Onde rodam router/registry/monitoring/Loki | `policies/features/manifests/*` | `nodeSelector` / `tolerations` |
+| Componentes do monitoring na infra | `policies/features/manifests/observability/01-cluster-monitoring-config.yaml` | blocos por componente |
+| O que o logging coleta e para onde | `policies/features/manifests/logging/04-clusterlogforwarder.yaml` | `pipelines`, `outputs` |
+| StorageClass dos PVCs do Loki no cluster filho | `policies/features/manifests/loki/05-lokistack.yaml` | `storageClassName` |
+| Plugin de logs no console | `policies/features/manifests/logging-ui/uiplugin.yaml` | `logsLimit`, `timeout` |
+| Catálogo/canal dos operators | `policies/features/manifests/{loki,logging}/02-operator.yaml` | sempre `redhat-operators`, canal padrão mais atual |
+
+## 9. O que ainda não é configurável (e como seria)
+
+| Item | Situação hoje | Como adicionar |
+|---|---|---|
+| Rede secundária / VLAN para os nós | nós só na rede padrão de pods do hub | component `network/<nome>` com NetworkAttachmentDefinition + `additionalNetworks` no NodePool |
+| Segundo pool de workers (GPU, AAP...) | um pool de workers + infra opcional | component `workers-extra/<nome>` |
+| Autoscaling de nós | réplicas fixas | campo `autoScaling` no NodePool via component |
+| Proxy de saída | não configurado | `spec.configuration.proxy` no HostedCluster via component |
+| Certificado próprio no ingress | certificado padrão | Secret + `defaultCertificate` na policy de ingress |
+| Tipo de rede | fixo `OVNKubernetes` | não recomendado mudar |
+
+Para criar um component novo, veja README → "Criar um component novo".

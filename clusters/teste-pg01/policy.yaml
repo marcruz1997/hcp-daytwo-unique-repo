@@ -1,14 +1,15 @@
-# Arquivo fixo: só o nome do cluster nas 3 linhas marcadas.
+# ARQUIVO FIXO: não edite. É igual em todos os clusters.
+# O nome (hcp-<pasta>, pb-hcp-<pasta>) e o label pg.lab/cluster=<pasta> são colocados
+# automaticamente pelo ApplicationSet (bootstrap/20-clusters-appset.yaml) a partir do
+# NOME DA PASTA. Por isso a pasta precisa ter o mesmo nome do "name:" da declaração.
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
   name: hcp-cluster
 placementBindingDefaults:
-  name: pb-hcp-teste-pg01                 # <- nome
+  name: pb-hcp
 policyDefaults:
   namespace: pg-provisioning
-  policyLabels:
-    pg.lab/cluster: teste-pg01            # <- nome (filtro por cluster no console)
   placement:
     placementName: pl-local-cluster   # Placement compartilhada (hub/)
   remediationAction: enforce
@@ -19,6 +20,6 @@ policyDefaults:
   standards: ["NIST SP 800-53"]
   controls: ["CM-2 Baseline Configuration"]
 policies:
-  - name: hcp-teste-pg01                      # <- nome
+  - name: hcp
     manifests:
       - path: cluster

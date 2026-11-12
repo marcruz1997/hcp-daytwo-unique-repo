@@ -1,5 +1,7 @@
 # Um Application por pasta clusters/<nome>/. Cada pasta gera (via PolicyGenerator) a policy
 # hcp-<nome> em pg-provisioning, que o ACM aplica no local-cluster para criar o cluster.
+# O NOME vem da pasta: o policy.yaml de cada cluster é fixo ("hcp"/"pb-hcp") e aqui o Argo
+# acrescenta o sufixo -<pasta>, o label pg.lab/cluster e acerta a referência do binding.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -28,6 +30,17 @@ spec:
         repoURL: https://github.com/marcruz1997/hcp-lab-day-two-policies.git
         targetRevision: main
         path: "{{ .path.path }}"
+        kustomize:
+          nameSuffix: "-{{ .path.basename }}"          # hcp -> hcp-<pasta>, pb-hcp -> pb-hcp-<pasta>
+          commonLabels:
+            pg.lab/cluster: "{{ .path.basename }}"      # filtro por cluster no console
+          patches:
+            # o binding aponta para a policy já com o nome final
+            - target: {kind: PlacementBinding}
+              patch: |-
+                - op: replace
+                  path: /subjects/0/name
+                  value: "hcp-{{ .path.basename }}"
       destination:
         server: https://kubernetes.default.svc
         namespace: pg-provisioning
