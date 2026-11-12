@@ -1,0 +1,14 @@
+# O IdP do Entra ID é configurado no HostedCluster (features/oauth-entraid). Aqui damos cluster-admin
+# ao grupo: o claim "groups" do Entra traz o Object ID do grupo, que vira o nome do Group no OpenShift.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pg-lab-entraid-admins
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: '{{hub index .ManagedClusterLabels "config.pg.lab/entraid-admin-group" hub}}'

@@ -4,6 +4,20 @@ Versão alternativa do `lab-hcp-day-two`: aqui **o próprio cluster é criado po
 O Argo CD só leva as policies do Git para o hub; quem cria e mantém HostedCluster, NodePools e
 ManagedCluster é o ACM (`enforce` no `local-cluster`). Tudo aparece em **Governance**.
 
+## Como Terraform
+
+| Terraform | Aqui |
+|---|---|
+| módulo (`module "ntp" { source = ... }`) | component em `provisioning/` (ex.: `provisioning/features/ntp`) |
+| `main.tf` + `terraform.tfvars` | **um arquivo por cluster**: `clusters/<nome>/cluster/kustomization.yaml` (lista `components` = módulos ligados; `patches` = valores) |
+| defaults do `variables.tf` | `provisioning/base/params-defaults.yaml` |
+| `terraform plan` | diff da Application `pg-<nome>` no Argo CD |
+| `terraform apply` | `git push` (o Argo sincroniza e o ACM aplica só a diferença) |
+| state | o próprio cluster: o ACM compara o desejado com o que está rodando |
+
+Ligar um módulo = descomentar a linha. Desligar = comentar. Mudar um valor = editar o patch.
+Um push aplica tudo, no hub e dentro do cluster.
+
 ## Manuais
 
 - [docs/MANUAL-CRIACAO.md](docs/MANUAL-CRIACAO.md): criar, configurar o day-2, mudar e destruir clusters
@@ -98,6 +112,7 @@ KlusterletAddonConfig só existe depois que o ACM registra o cluster).
 | `workers/<size>` | Tamanho dos workers | `workerReplicas` |
 | `infra/<size>` | NodePool de infra (label + taint) já no tamanho | `infraReplicas` |
 | `features/oauth-htpasswd` | Login htpasswd + cluster-admin | `oauth.adminUser`, `oauth.htpasswd` |
+| `features/oauth-entraid` | Login Microsoft Entra ID + cluster-admin para um grupo (soma com o htpasswd) | `entraid.*` + Secret no hub ([manual 3.1.2](docs/MANUAL-CRIACAO.md)) |
 | `features/ntp` | chrony em todos os nós (**recria os nós** se ligado depois) | servidores em `features/ntp/` |
 | `features/etcd-backup` | CronJob no hub com snapshot diário do etcd | horário em `features/etcd-backup/` |
 | `features/ingress` | Router nos nós de infra | `ingress.replicas` (entre aspas) |
@@ -124,6 +139,11 @@ resto que vira label (`ingress.replicas`, `loki.retentionDays`) vai **entre aspa
 2. Recursos que precisam do nome do cluster usam `CLUSTER` + um label `pg.lab/role=<x>`.
 3. Adicione o replacement em `provisioning/apply-params/replacements.yaml` selecionando
    pelo label (assim, se a feature não estiver ligada, o alvo é simplesmente ignorado).
+4. Label `feature.pg.lab/<nome>: "false"` em `provisioning/base/managedcluster.yaml` e o component
+   troca para `"true"` com `op: add` (é isso que faz "tirar da lista" desligar a feature).
+5. Parâmetros novos com valor padrão em `provisioning/base/params-defaults.yaml`.
+6. Component **acrescenta**, não substitui: listas com `/-` (como os `oauth-*` em
+   `identityProviders`). Segredo nunca no Git.
 
 ## Gerenciamento
 
@@ -131,8 +151,9 @@ resto que vira label (`ingress.replicas`, `loki.retentionDays`) vai **entre aspa
   HostedCluster/NodePool/ManagedCluster é revertida pelo ACM. Campos que o HyperShift completa
   (ex.: services) não brigam com a policy, porque `musthave` só exige o que está declarado.
 - **Day-2:** policies em `pg-policies-features`, selecionadas pelos labels `feature.pg.lab/*`.
-- Ligar uma feature depois: adicione o component, push. Desligar: remova o component; a policy
-  para de gerenciar, mas **não apaga** o que criou (`pruneObjectBehavior: None`).
+- Ligar uma feature depois: adicione o component, push. Desligar: remova o component; o label
+  `feature.pg.lab/<feature>` volta a `"false"`, a policy de day-2 sai do cluster, mas **não apaga**
+  o que criou (`pruneObjectBehavior: None`).
 
 ## Destruir um cluster (manual, nesta ordem)
 
@@ -145,7 +166,7 @@ oc delete managedcluster app01 && oc get ns app01 -w
 # 3. destruir
 oc -n clusters delete hostedcluster app01
 # 4. limpar sobras
-oc -n clusters delete secret sshkey-cluster-app01 htpasswd-app01 --ignore-not-found
+oc -n clusters delete secret sshkey-cluster-app01 htpasswd-app01 entraid-app01 --ignore-not-found
 oc -n clusters delete configmap app01-chrony --ignore-not-found
 oc -n hcp-etcd-backup delete cronjob,pvc etcd-backup-app01 --ignore-not-found
 oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-found
@@ -155,7 +176,7 @@ oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-foun
 
 1. Troque a URL do repo se o nome for outro:
    ```bash
-   grep -rl lab-hcp-policygenerator bootstrap | xargs sed -i '' 's#marcruz1997/hcp-lab-day-two-policies#SEU_ORG/SEU_REPO#'
+   grep -rl hcp-lab-day-two-policies bootstrap | xargs sed -i '' 's#marcruz1997/hcp-lab-day-two-policies#SEU_ORG/SEU_REPO#'
    ```
 2. Pré-requisitos no hub (iguais ao outro repo): OpenShift GitOps com o plugin do PolicyGenerator,
    ACM/MCE com HyperShift, OpenShift Virtualization, MetalLB (APIServer LoadBalancer).

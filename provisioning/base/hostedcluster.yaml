@@ -29,6 +29,10 @@ spec:
     networkType: OVNKubernetes
   controllerAvailabilityPolicy: HighlyAvailable
   infrastructureAvailabilityPolicy: HighlyAvailable
+  # Logins (IdPs). Vazia na base: features/oauth-htpasswd e features/oauth-entraid acrescentam o seu.
+  configuration:
+    oauth:
+      identityProviders: []
   platform:
     type: KubeVirt
     kubevirt:

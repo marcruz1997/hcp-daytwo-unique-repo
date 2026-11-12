@@ -54,6 +54,7 @@ Uma linha por item. **A ordem não importa.**
 | `workers/<size>` | Tamanho dos workers (obrigatório ter um) |
 | `infra/<size>` | Cria o NodePool de infra já no tamanho |
 | `features/oauth-htpasswd` | Login htpasswd + cluster-admin para o `adminUser` |
+| `features/oauth-entraid` | Login Microsoft Entra ID + cluster-admin para um grupo (ver 3.1.2). Pode ficar junto com o htpasswd |
 | `features/ntp` | chrony em todos os nós |
 | `features/etcd-backup` | Snapshot diário do etcd (no hub) |
 | `features/ingress` | Router nos nós de infra |
@@ -93,6 +94,30 @@ spec:
 
 > Os tamanhos disponíveis dependem da versão do Loki Operator; confira na documentação do
 > Logging da sua versão. Retenção (`loki.retentionDays`) é independente do tamanho.
+
+#### 3.1.2 Login com Microsoft Entra ID (`features/oauth-entraid`)
+
+1. No Entra ID, registre uma aplicação (App registrations → New registration):
+   - **Redirect URI** (Web): `https://<host-oauth>/oauth2callback/entraid`. O host sai de
+     ```bash
+     oc -n clusters-app01 get route oauth -o jsonpath='{.spec.host}{"\n"}'
+     ```
+     (o cluster precisa existir: dá para ligar a feature depois de criado)
+   - **Token configuration** → *Add groups claim* → *Security groups*.
+   - **Certificates & secrets** → *New client secret* (copie o *Value*).
+2. Crie o Secret no hub (**fora do Git**):
+   ```bash
+   oc -n clusters create secret generic entraid-app01 --from-literal=clientSecret='<valor>'
+   ```
+3. No patch do cluster:
+   ```yaml
+   entraid:
+     tenantId: "<Directory (tenant) ID>"
+     clientId: "<Application (client) ID>"
+     adminGroup: "<Object ID do grupo que vira cluster-admin>"   # ENTRE aspas
+   ```
+4. Descomente `features/oauth-entraid` e faça push. Na tela de login aparecem `entraid` e, se
+   ligado, `htpasswd` (bom como acesso de emergência).
 
 ### 3.2 `patches`: só o que muda em relação ao padrão
 
@@ -180,8 +205,9 @@ Edite `clusters/app01/cluster/kustomization.yaml` e faça push. O ACM aplica soz
 | Mudar `workerReplicas` / `infraReplicas` | Adiciona/remove nós |
 | Ligar ou mudar `ntp` | **Recria todos os nós** |
 | Trocar senha (`oauth.htpasswd`) | OAuth recarrega, nós intactos |
+| Ligar `oauth-entraid` | OAuth recarrega com o login do Entra ID, nós intactos |
 | Mudar `releaseImage` | **Upgrade** do cluster (control plane, depois workers) |
-| Tirar uma feature da lista | A policy para de gerenciar, mas **não apaga** o que já criou |
+| Tirar uma feature da lista | O label volta a `"false"` e a policy de day-2 sai do cluster, mas **não apaga** o que já criou |
 
 ---
 
@@ -200,7 +226,7 @@ oc get ns app01 -w
 oc -n clusters delete hostedcluster app01
 
 # 4. sobras
-oc -n clusters delete secret sshkey-cluster-app01 htpasswd-app01 --ignore-not-found
+oc -n clusters delete secret sshkey-cluster-app01 htpasswd-app01 entraid-app01 --ignore-not-found
 oc -n clusters delete configmap app01-chrony --ignore-not-found
 oc -n hcp-etcd-backup delete cronjob,pvc etcd-backup-app01 --ignore-not-found
 oc -n pg-policies-features delete objectbucketclaim loki-app01 --ignore-not-found

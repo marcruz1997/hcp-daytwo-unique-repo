@@ -11,6 +11,7 @@ components:
   # - ../../../provisioning/infra/small              # demo|small|medium|large|xlarge
   # --- features (descomente o que quiser) ---
   # - ../../../provisioning/features/oauth-htpasswd
+  # - ../../../provisioning/features/oauth-entraid    # + Secret entraid-NOME no hub
   # - ../../../provisioning/features/ntp
   # - ../../../provisioning/features/etcd-backup
   # - ../../../provisioning/features/ingress
@@ -35,6 +36,7 @@ patches:
         # oauth:
         #   htpasswd: |
         #     admin:$2y$05$...
+        # entraid: {tenantId: "...", clientId: "...", adminGroup: "..."}
         # ingress: {replicas: "3"}
         # observability: {prometheusRetention: 15d, prometheusStorage: 50Gi}
         # loki: {size: 1x.small, retentionDays: "15"}

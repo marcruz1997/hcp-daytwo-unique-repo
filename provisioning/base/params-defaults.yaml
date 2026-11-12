@@ -26,6 +26,11 @@ spec:
     # htpasswd -nbB admin 'senha'   (vários usuários: uma linha cada)
     htpasswd: |
       admin:$2y$05$1sw1u/TRkzkRGBUoUbCy4.IiSJHAtjZj5Qmx0yPukhBtDmys23GdO
+  entraid:                             # features/oauth-entraid (login Microsoft Entra ID)
+    tenantId: DEFINA_O_TENANT          # Directory (tenant) ID
+    clientId: DEFINA_O_CLIENT_ID       # Application (client) ID
+    adminGroup: DEFINA_O_GRUPO         # Object ID do grupo do Entra que vira cluster-admin
+    # O client secret NÃO fica no Git: Secret "entraid-<nome>" no namespace clusters (manual 3.1.2).
   ingress:                             # features/ingress (<= nº de nós de infra)
     replicas: "2"
   observability:                       # features/observability

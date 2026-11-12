@@ -3,7 +3,7 @@
 # Parâmetros (réplicas, tamanhos, retenção) chegam pelos labels config.pg.lab/* via hub templates.
 #
 # Features que NÃO aparecem aqui porque vivem no hub (policy de provisionamento do cluster):
-# infra-nodes, ntp, etcd-backup e a parte de IdP do oauth-htpasswd.
+# infra-nodes, ntp, etcd-backup e a parte de IdP do oauth-htpasswd e do oauth-entraid.
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
@@ -29,6 +29,15 @@ policies:
           - {key: feature.pg.lab/oauth-htpasswd, operator: In, values: ["true"]}
     manifests:
       - path: manifests/oauth-htpasswd
+
+  - name: feature-oauth-entraid
+    placement:
+      name: pl-feature-oauth-entraid
+      labelSelector:
+        matchExpressions:
+          - {key: feature.pg.lab/oauth-entraid, operator: In, values: ["true"]}
+    manifests:
+      - path: manifests/oauth-entraid
 
   - name: feature-registry
     placement:

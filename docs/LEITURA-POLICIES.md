@@ -13,6 +13,7 @@ que algo está NonCompliant. Para criar/alterar clusters, veja [MANUAL-CRIACAO.m
 | `pg-policies-hub` | `hcp-pull-secret` | local-cluster | enforce | Copia o pull-secret do hub para `clusters/hcp-pull-secret` |
 | | `loki-s3-endpoint` | local-cluster | enforce | Descobre a Route S3 do NooBaa e a CA do ingress do hub e publica em `pg-policies-features/loki-s3-endpoint` |
 | `pg-policies-features` | `feature-oauth-htpasswd` | clusters com a feature | enforce | cluster-admin para o `adminUser` |
+| | `feature-oauth-entraid` | " | enforce | cluster-admin para o grupo do Entra ID (`entraid.adminGroup`) |
 | | `feature-ingress` | " | enforce | Router: réplicas + nós de infra |
 | | `feature-registry` | " | enforce | Image registry + PVC |
 | | `feature-observability` | " | enforce | Monitoring persistente, UWM, COO |

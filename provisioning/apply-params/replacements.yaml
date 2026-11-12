@@ -34,6 +34,10 @@ replacements:
         fieldPaths:
           - "spec.configuration.oauth.identityProviders.[name=htpasswd].htpasswd.fileData.name"
         options: {delimiter: "-", index: 1}
+      - select: {kind: HostedCluster, labelSelector: pg.lab/oauth-entraid=true}
+        fieldPaths:
+          - "spec.configuration.oauth.identityProviders.[name=entraid].openID.clientSecret.name"
+        options: {delimiter: "-", index: 1}
       - select: {kind: NodePool, labelSelector: pg.lab/pool=worker}
         fieldPaths:
           - "metadata.name"
@@ -142,6 +146,23 @@ replacements:
       - select: {kind: ManagedCluster, labelSelector: feature.pg.lab/oauth-htpasswd=true}
         fieldPaths:
           - "metadata.labels.[config.pg.lab/oauth-admin]"
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.entraid.clientId}
+    targets:
+      - select: {kind: HostedCluster, labelSelector: pg.lab/oauth-entraid=true}
+        fieldPaths:
+          - "spec.configuration.oauth.identityProviders.[name=entraid].openID.clientID"
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.entraid.tenantId}
+    targets:
+      # https://login.microsoftonline.com/<tenant>/v2.0
+      - select: {kind: HostedCluster, labelSelector: pg.lab/oauth-entraid=true}
+        fieldPaths:
+          - "spec.configuration.oauth.identityProviders.[name=entraid].openID.issuer"
+        options: {delimiter: "/", index: 3}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.entraid.adminGroup}
+    targets:
+      - select: {kind: ManagedCluster, labelSelector: feature.pg.lab/oauth-entraid=true}
+        fieldPaths:
+          - "metadata.labels.[config.pg.lab/entraid-admin-group]"
   - source: {kind: ClusterParams, name: params, fieldPath: spec.ingress.replicas}
     targets:
       - select: {kind: ManagedCluster, labelSelector: feature.pg.lab/ingress=true}
