@@ -5,12 +5,24 @@ que algo está NonCompliant. Para criar/alterar clusters, veja [MANUAL-CRIACAO.m
 
 ---
 
+## 0. Verificação rápida (tudo de uma vez)
+
+```bash
+scripts/check-cluster.sh app01
+```
+
+Confere provisionamento, NodePools, todas as policies (mostrando a etapa que travou) e, para
+cada feature ligada, se o recurso está de fato funcionando dentro do cluster (via túnel
+port-forward pelo hub, então funciona mesmo sem rota até a rede do cluster). Termina com um
+resumo `OK / aviso / falha`.
+
 ## 1. Mapa das policies
 
 | Namespace (hub) | Policy | Roda em | Modo | Para que serve |
 |---|---|---|---|---|
 | `pg-provisioning` | `hcp-<nome>` (uma por cluster) | **local-cluster** (hub) | enforce | Cria/mantém HostedCluster, NodePools, ManagedCluster, KAC, secrets, NTP, backup etcd, bucket Loki |
 | `pg-policies-hub` | `hcp-pull-secret` | local-cluster | enforce | Copia o pull-secret do hub para `clusters/hcp-pull-secret` |
+| | `mco-disable-alerting` | local-cluster | enforce | ACM Observability: mantém as métricas no hub e desliga o encaminhamento de alertas (evita briga pelo `cluster-monitoring-config`) |
 | | `loki-s3-endpoint` | local-cluster | enforce | Descobre a Route S3 do NooBaa e a CA do ingress do hub e publica em `pg-policies-features/loki-s3-endpoint` |
 | `pg-policies-features` | `feature-oauth-htpasswd` | clusters com a feature | enforce | cluster-admin para o `adminUser` |
 | | `feature-ingress` | " | enforce | Router: réplicas + nós de infra |
@@ -141,6 +153,16 @@ oc -n pg-policies-features get objectbucketclaim loki-<nome>                    
 oc --kubeconfig /tmp/<nome>.kubeconfig -n openshift-logging get lokistack logging-loki -o jsonpath='{.status.conditions}'
 ```
 `endpoint` vazio ou `https://<no value>`: o hub não tem a Route `s3` (ODF sem MCG).
+
+### Addon `observability-controller` Degraded: "CMO configuration is being constantly updated"
+O ACM Observability e a policy `feature-observability` estavam reescrevendo o mesmo
+`cluster-monitoring-config`. A policy `mco-disable-alerting` (hub) resolve: confira se está
+Compliant e se a anotação existe:
+```bash
+oc -n pg-policies-hub get policy mco-disable-alerting
+oc get multiclusterobservability -o jsonpath='{.items[*].metadata.annotations.mco-disable-alerting}{"\n"}'
+```
+O addon volta a Available em alguns minutos. Alertas: cada cluster usa o próprio Alertmanager.
 
 ### `verify-infra-nodes` NonCompliant
 Não existe nó com label `node-role.kubernetes.io/infra` **e** os taints `reserved`. Confira o

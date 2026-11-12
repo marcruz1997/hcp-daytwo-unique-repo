@@ -29,3 +29,8 @@ policies:
   - name: loki-s3-endpoint
     manifests:
       - path: manifests/loki-s3-endpoint.yaml
+  # ACM Observability: mantém métricas no hub, desliga o encaminhamento de alertas
+  # (o cluster-monitoring-config dos clusters fica só com a policy feature-observability).
+  - name: mco-disable-alerting
+    manifests:
+      - path: manifests/mco-disable-alerting.yaml

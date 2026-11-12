@@ -1,0 +1,24 @@
+# Produção (opção B): o ACM Observability continua COLETANDO MÉTRICAS de todos os clusters,
+# mas NÃO encaminha alertas ao hub. Assim ele para de editar o cluster-monitoring-config dos
+# clusters filhos, que passa a ter um único dono: a policy feature-observability.
+# (Sem isso o addon observability-controller fica Degraded: "CMO configuration is being
+#  constantly updated", porque os dois ficam reescrevendo o mesmo ConfigMap.)
+# O MultiClusterObservability é DESCOBERTO no hub (nada fixo). Hub sem Observability: não faz nada.
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: mco-disable-alerting
+spec:
+  remediationAction: enforce
+  severity: medium
+  object-templates-raw: |
+    {{- range (lookup "observability.open-cluster-management.io/v1beta2" "MultiClusterObservability" "" "").items }}
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: observability.open-cluster-management.io/v1beta2
+        kind: MultiClusterObservability
+        metadata:
+          name: {{ .metadata.name }}
+          annotations:
+            mco-disable-alerting: "true"
+    {{- end }}
