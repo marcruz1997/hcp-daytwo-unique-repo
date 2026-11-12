@@ -11,6 +11,15 @@ patches:
       - op: add
         path: /metadata/labels/feature.pg.lab~1loki
         value: "true"
+      - op: add
+        path: /metadata/labels/config.pg.lab~1loki-size
+        value: "PLACEHOLDER"
+      - op: add
+        path: /metadata/labels/config.pg.lab~1loki-retention
+        value: "PLACEHOLDER"
+      - op: add
+        path: /metadata/labels/config.pg.lab~1loki-s3-scheme
+        value: "PLACEHOLDER"
 replacements:
   - source: {kind: ClusterParams, name: params, fieldPath: spec.name}
     targets:
@@ -21,14 +30,11 @@ replacements:
     targets:
       - select: {kind: ManagedCluster}
         fieldPaths: ["metadata.labels.[config.pg.lab/loki-size]"]
-        options: {create: true}
   - source: {kind: ClusterParams, name: params, fieldPath: spec.loki.retentionDays}
     targets:
       - select: {kind: ManagedCluster}
         fieldPaths: ["metadata.labels.[config.pg.lab/loki-retention]"]
-        options: {create: true}
   - source: {kind: ClusterParams, name: params, fieldPath: spec.loki.s3Scheme}
     targets:
       - select: {kind: ManagedCluster}
         fieldPaths: ["metadata.labels.[config.pg.lab/loki-s3-scheme]"]
-        options: {create: true}

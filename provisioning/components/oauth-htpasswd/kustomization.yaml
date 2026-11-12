@@ -25,6 +25,9 @@ patches:
       - op: add
         path: /metadata/labels/feature.pg.lab~1oauth-htpasswd
         value: "true"
+      - op: add
+        path: /metadata/labels/config.pg.lab~1oauth-admin
+        value: "PLACEHOLDER"
 replacements:
   - source: {kind: ClusterParams, name: params, fieldPath: spec.name}
     targets:
@@ -42,4 +45,3 @@ replacements:
     targets:
       - select: {kind: ManagedCluster}
         fieldPaths: ["metadata.labels.[config.pg.lab/oauth-admin]"]
-        options: {create: true}

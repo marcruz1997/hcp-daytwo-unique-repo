@@ -8,9 +8,11 @@ patches:
       - op: add
         path: /metadata/labels/feature.pg.lab~1ingress
         value: "true"
+      - op: add
+        path: /metadata/labels/config.pg.lab~1ingress-replicas
+        value: "PLACEHOLDER"
 replacements:
   - source: {kind: ClusterParams, name: params, fieldPath: spec.ingress.replicas}
     targets:
       - select: {kind: ManagedCluster}
         fieldPaths: ["metadata.labels.[config.pg.lab/ingress-replicas]"]
-        options: {create: true}
