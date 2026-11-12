@@ -1,16 +1,41 @@
-# Sem "channel": usa o canal padrão do catálogo, compatível com a versão do cluster.
-# Para fixar: adicione channel: stable-6.x em subscription.
-apiVersion: policy.open-cluster-management.io/v1beta1
-kind: OperatorPolicy
+# Loki Operator SEMPRE do catálogo Red Hat (redhat-operators) e SEMPRE no canal mais atual.
+# O canal é lido, no próprio cluster, do PackageManifest do redhat-operators (defaultChannel).
+# Pacotes de mesmo nome do community-operators são ignorados (filtro catalog=redhat-operators).
+# Quando a Red Hat publicar um canal novo como padrão, a policy atualiza a Subscription sozinha.
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
 metadata:
   name: loki-operator
 spec:
   remediationAction: enforce
   severity: high
-  complianceType: musthave
-  upgradeApproval: Automatic
-  subscription:
-    name: loki-operator
-    namespace: openshift-operators-redhat
-    source: redhat-operators
-    sourceNamespace: openshift-marketplace
+  object-templates-raw: |
+    {{- $pkg := "loki-operator" }}
+    {{- $ns := "openshift-operators-redhat" }}
+    {{- $ch := "" }}
+    {{- range (lookup "packages.operators.coreos.com/v1" "PackageManifest" "openshift-marketplace" "" "catalog=redhat-operators").items }}
+    {{- if eq .metadata.name $pkg }}{{ $ch = .status.defaultChannel }}{{ end }}
+    {{- end }}
+    {{- if not (lookup "operators.coreos.com/v1" "OperatorGroup" $ns "").items }}
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: operators.coreos.com/v1
+        kind: OperatorGroup
+        metadata:
+          name: {{ $ns }}
+          namespace: {{ $ns }}
+        spec: {}
+    {{- end }}
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: Subscription
+        metadata:
+          name: {{ $pkg }}
+          namespace: {{ $ns }}
+        spec:
+          name: {{ $pkg }}
+          source: redhat-operators
+          sourceNamespace: openshift-marketplace
+          channel: {{ $ch }}
+          installPlanApproval: Automatic
