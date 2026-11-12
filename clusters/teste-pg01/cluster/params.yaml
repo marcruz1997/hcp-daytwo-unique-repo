@@ -21,7 +21,7 @@ spec:
   oauth:                               # oauth-htpasswd
     adminUser: "admin"
     htpasswd: |
-      admin:$2y$05$TROQUE-PELO-HASH (htpasswd -nbB admin 'senha')
+      admin:$2y$05$1sw1u/TRkzkRGBUoUbCy4.IiSJHAtjZj5Qmx0yPukhBtDmys23GdO
   ingress:                             # features/ingress (<= nº de nós de infra)
     replicas: "3"
   observability:                       # features/observability
