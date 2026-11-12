@@ -12,7 +12,7 @@ Para entender e investigar as policies, veja [LEITURA-POLICIES.md](LEITURA-POLIC
 | Chave SSH pública padrão | `provisioning/base/params-defaults.yaml` → `sshPublicKey` | `cat ~/.ssh/hcp-clusters.pub` |
 | Servidores NTP | `provisioning/features/ntp/chrony-configmap.yaml` | `scripts/chrony-b64.sh ntp1 ntp2` e cole o resultado na linha `source:` |
 | Horário e retenção do backup do etcd | `provisioning/features/etcd-backup/resources.yaml` | `schedule` e `RETENTION_DAYS` |
-| Bucket S3 do Loki (só se usar loki/logging) | Hub | `oc get sc \| grep -i rgw` deve mostrar `ocs-external-storagecluster-ceph-rgw` |
+| S3 para o Loki (só se usar loki/logging) | Hub | `oc get sc \| grep noobaa` e `oc -n openshift-storage get route s3` devem existir (ODF com MCG). Endpoint e CA são descobertos automaticamente pela policy `loki-s3-endpoint` |
 
 > Os valores em `params-defaults.yaml` valem para **todos** os clusters que não os sobrescreverem.
 > Senha de admin: defina **uma por cluster** (seção 3). Não dependa do padrão.
@@ -59,8 +59,8 @@ Uma linha por item. **A ordem não importa.**
 | `features/ingress` | Router nos nós de infra |
 | `features/registry` | Image registry interno com PVC |
 | `features/observability` | Prometheus/Alertmanager persistentes + user workload + COO |
-| `features/logging` | Logging (app, infra, audit) → Loki. **Já inclui o loki** |
-| `features/loki` | Só o Loki (use apenas sem `logging`) |
+| `features/logging` | Logging (app, infra, audit) → Loki. **Já inclui o loki** (tamanho: `loki.size`, ver 3.1.1) |
+| `features/loki` | Só o Loki (use apenas sem `logging`; tamanho: `loki.size`) |
 
 Tamanhos (`demo` só para lab):
 
@@ -71,6 +71,28 @@ Tamanhos (`demo` só para lab):
 | medium | 8 | 32Gi | 120Gi |
 | large | 16 | 64Gi | 120Gi |
 | xlarge | 32 | 128Gi | 120Gi |
+
+#### 3.1.1 Tamanho do Loki (`loki.size`)
+
+Com `features/logging` ou `features/loki`, o tamanho da instância vem de `loki.size` no patch
+(padrão: `1x.demo`, em `provisioning/base/params-defaults.yaml`).
+
+| `loki.size` | Uso | Alta disponibilidade | Suporte Red Hat | Nós de infra sugeridos |
+|---|---|---|---|---|
+| `1x.demo` (padrão) | Lab/demonstração | Não | **Não** (só testes) | `infra/small` ou maior |
+| `1x.pico` | Produção pequena | Sim | Sim | `infra/medium` ou maior |
+| `1x.extra-small` | Produção pequena | Sim | Sim | `infra/medium` ou maior |
+| `1x.small` | Produção média | Sim | Sim | `infra/large` ou maior |
+| `1x.medium` | Produção grande | Sim | Sim | `infra/xlarge` |
+
+```yaml
+spec:
+  name: app01
+  loki: {size: "1x.small", retentionDays: "30"}   # ENTRE aspas
+```
+
+> Os tamanhos disponíveis dependem da versão do Loki Operator; confira na documentação do
+> Logging da sua versão. Retenção (`loki.retentionDays`) é independente do tamanho.
 
 ### 3.2 `patches`: só o que muda em relação ao padrão
 

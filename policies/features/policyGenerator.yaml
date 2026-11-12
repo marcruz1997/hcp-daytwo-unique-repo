@@ -63,7 +63,8 @@ policies:
       - path: manifests/loki/01-namespaces.yaml
       - path: manifests/loki/02-operator.yaml
       - path: manifests/loki/03-s3-secret.yaml
-      - path: manifests/loki/04-lokistack.yaml
+      - path: manifests/loki/04-s3-ca.yaml
+      - path: manifests/loki/05-lokistack.yaml
 
   - name: feature-logging
     placement:

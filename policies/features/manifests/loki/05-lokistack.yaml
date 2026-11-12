@@ -14,6 +14,9 @@ spec:
     secret:
       name: logging-loki-s3
       type: s3
+    tls:
+      caName: loki-s3-ca          # CA do ingress do hub (04-s3-ca.yaml)
+      caKey: service-ca.crt
   limits:
     global:
       retention:

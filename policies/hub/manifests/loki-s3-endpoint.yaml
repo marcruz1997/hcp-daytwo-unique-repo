@@ -1,0 +1,14 @@
+# Descobre AUTOMATICAMENTE, no hub onde roda, o endpoint S3 externo e a CA para o Loki
+# dos clusters filhos. Nada fixo no Git: em outro hub, outra Route/CA.
+#  - endpoint: Route "s3" do NooBaa/MCG (openshift-storage), alcançável pelos clusters filhos
+#  - ca-bundle.crt: CA do ingress do hub (a Route usa o certificado do router)
+# Templates SEM "hub": são resolvidos no próprio hub (a policy roda no local-cluster).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-s3-endpoint
+  namespace: pg-policies-features
+data:
+  endpoint: 'https://{{ (lookup "route.openshift.io/v1" "Route" "openshift-storage" "s3").spec.host }}'
+  ca-bundle.crt: |
+    {{ fromConfigMap "openshift-config-managed" "default-ingress-cert" "ca-bundle.crt" | autoindent }}

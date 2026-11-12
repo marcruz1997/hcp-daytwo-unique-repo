@@ -6,11 +6,13 @@ kind: Kustomization
 resources: [../../../provisioning/base]
 components:
   - ../../../provisioning/workers/small              # demo|small|medium|large|xlarge
-  - ../../../provisioning/infra/demo                 # opcional: nós de infra
+  - ../../../provisioning/infra/small                 # opcional: nós de infra
   - ../../../provisioning/features/oauth-htpasswd
   - ../../../provisioning/features/ntp
   - ../../../provisioning/features/etcd-backup
   - ../../../provisioning/features/ingress
+  - ../../../provisioning/features/logging
+  - ../../../provisioning/features/observability
 patches:
   - target: {kind: ClusterParams}
     patch: |-
@@ -20,4 +22,6 @@ patches:
         name: teste-pg01
         infraReplicas: 3
         ingress: {replicas: "3"}
+        observability: {prometheusRetention: "7d", prometheusStorage: "100Gi"}
+        loki: {size: "1x.demo", retentionDays: "2"}
 transformers: [../../../provisioning/apply-params]

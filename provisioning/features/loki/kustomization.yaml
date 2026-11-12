@@ -16,6 +16,3 @@ patches:
       - op: add
         path: /metadata/labels/config.pg.lab~1loki-retention
         value: "PLACEHOLDER"
-      - op: add
-        path: /metadata/labels/config.pg.lab~1loki-s3-scheme
-        value: "PLACEHOLDER"

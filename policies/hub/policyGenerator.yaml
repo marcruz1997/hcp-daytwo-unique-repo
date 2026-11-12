@@ -24,3 +24,8 @@ policies:
   - name: hcp-pull-secret
     manifests:
       - path: manifests/hcp-pull-secret.yaml
+  # Publica em pg-policies-features/loki-s3-endpoint o endpoint S3 (Route do NooBaa) e a CA
+  # do ingress DESTE hub. Usado pela policy feature-loki dos clusters filhos.
+  - name: loki-s3-endpoint
+    manifests:
+      - path: manifests/loki-s3-endpoint.yaml

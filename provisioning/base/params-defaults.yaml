@@ -37,4 +37,5 @@ spec:
   loki:                                # features/loki e features/logging
     size: 1x.demo
     retentionDays: "7"
-    s3Scheme: http
+    # StorageClass de bucket (ObjectBucketClaim) do hub. Endpoint e CA são descobertos sozinhos.
+    bucketStorageClass: openshift-storage.noobaa.io

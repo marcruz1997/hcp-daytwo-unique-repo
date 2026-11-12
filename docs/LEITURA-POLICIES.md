@@ -11,6 +11,7 @@ que algo está NonCompliant. Para criar/alterar clusters, veja [MANUAL-CRIACAO.m
 |---|---|---|---|---|
 | `pg-provisioning` | `hcp-<nome>` (uma por cluster) | **local-cluster** (hub) | enforce | Cria/mantém HostedCluster, NodePools, ManagedCluster, KAC, secrets, NTP, backup etcd, bucket Loki |
 | `pg-policies-hub` | `hcp-pull-secret` | local-cluster | enforce | Copia o pull-secret do hub para `clusters/hcp-pull-secret` |
+| | `loki-s3-endpoint` | local-cluster | enforce | Descobre a Route S3 do NooBaa e a CA do ingress do hub e publica em `pg-policies-features/loki-s3-endpoint` |
 | `pg-policies-features` | `feature-oauth-htpasswd` | clusters com a feature | enforce | cluster-admin para o `adminUser` |
 | | `feature-ingress` | " | enforce | Router: réplicas + nós de infra |
 | | `feature-registry` | " | enforce | Image registry + PVC |
@@ -132,6 +133,14 @@ Leia o motivo (seção 4). Mensagens comuns:
 2. A Placement escolheu o cluster? (`placementdecisions`, seção 4)
 3. A cópia existe em `oc -n app01 get policies`? Se não, o cluster pode estar `AVAILABLE=Unknown`.
 4. Está Pending? Veja as etapas (dependência de operator ainda instalando).
+
+### Loki não sobe / erro de S3
+```bash
+oc -n pg-policies-features get configmap loki-s3-endpoint -o jsonpath='{.data.endpoint}{"\n"}'   # Route do NooBaa
+oc -n pg-policies-features get objectbucketclaim loki-<nome>                                       # Bound
+oc --kubeconfig /tmp/<nome>.kubeconfig -n openshift-logging get lokistack logging-loki -o jsonpath='{.status.conditions}'
+```
+`endpoint` vazio ou `https://<no value>`: o hub não tem a Route `s3` (ODF sem MCG).
 
 ### `verify-infra-nodes` NonCompliant
 Não existe nó com label `node-role.kubernetes.io/infra` **e** os taints `reserved`. Confira o

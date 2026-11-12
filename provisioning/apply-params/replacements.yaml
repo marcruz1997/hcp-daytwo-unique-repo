@@ -182,8 +182,8 @@ replacements:
       - select: {kind: ManagedCluster, labelSelector: feature.pg.lab/loki=true}
         fieldPaths:
           - "metadata.labels.[config.pg.lab/loki-retention]"
-  - source: {kind: ClusterParams, name: params, fieldPath: spec.loki.s3Scheme}
+  - source: {kind: ClusterParams, name: params, fieldPath: spec.loki.bucketStorageClass}
     targets:
-      - select: {kind: ManagedCluster, labelSelector: feature.pg.lab/loki=true}
+      - select: {kind: ObjectBucketClaim, labelSelector: pg.lab/role=loki-bucket}
         fieldPaths:
-          - "metadata.labels.[config.pg.lab/loki-s3-scheme]"
+          - "spec.storageClassName"
